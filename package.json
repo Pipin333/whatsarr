@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "test-webhook": "node test/simulate-webhook.js",
-    "test-search": "node test/test-search.js"
+    "test-search": "node test/test-search.js",
+    "configure:trackers": "node scripts/configure-trackers.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",
