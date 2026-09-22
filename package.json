@@ -8,7 +8,9 @@
     "start": "node src/index.js",
     "test-webhook": "node test/simulate-webhook.js",
     "test-search": "node test/test-search.js",
-    "configure:trackers": "node scripts/configure-trackers.js"
+    "test-streaming": "node test/test-progressive-streamer.js",
+    "configure:trackers": "node scripts/configure-trackers.js",
+    "configure:clients": "node scripts/configure-download-clients.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",

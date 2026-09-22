@@ -1,6 +1,7 @@
 const webhookServer = require('./webhook-server');
 const whatsappBot = require('./whatsapp');
 const arrService = require('./arr-service');
+const progressiveStreamer = require('./progressive-streamer');
 const config = require('./config');
 
 async function main() {
@@ -14,6 +15,10 @@ async function main() {
   // 1. Iniciar servidor de webhooks
   webhookServer.setWhatsAppClient(whatsappBot);
   await webhookServer.start();
+
+  // 1.1 Iniciar motor de streaming progresivo
+  progressiveStreamer.setWhatsAppClient(whatsappBot);
+  progressiveStreamer.start();
 
   // 2. Comprobar conexiones a Radarr y Sonarr
   const radarrStatus = await arrService.testRadarr();

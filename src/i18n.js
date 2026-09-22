@@ -33,7 +33,7 @@ const translations = {
     already_in_plex: '🍿 *{title}* ({year}) is already available on your Plex server!\nIt is downloaded and ready to watch.',
     already_downloading: '⏳ *{title}* has already been requested and is currently downloading.\nI will notify you as soon as it is finished!',
     download_started: '✅ Great! Searching and adding *{title}* in *{language}* to the download queue...\n\n⏳ I will message you here as soon as it is available on Plex.',
-    download_started_tv: '✅ Great! Downloading *{title}* ({season}) in *{language}*...\n\n⏳ I will message you here as soon as it is available on Plex.',
+    download_started_tv: '✅ Great! Downloading *{title}* ({season}) in *{language}* with progressive streaming...\n\n🍿 I will message you as soon as Episode 1 is ready to play!',
     download_completed: '🍿 Your request is ready on Plex!\n\n🎬 *{title}* ({year}){extraInfo}\nEnjoy watching! 🎉',
     
     // Missing episodes restoration
@@ -75,7 +75,7 @@ const translations = {
     already_in_plex: '🍿 ¡*{title}* ({year}) ya se encuentra en tu servidor Plex!\nYa está descargada y lista para ver.',
     already_downloading: '⏳ *{title}* ya fue solicitada y se encuentra actualmente descargándose.\n¡Te avisaré apenas termine!',
     download_started: '✅ ¡Excelente! Buscando y agregando en *{language}* a la cola de descarga...\n\n⏳ Te avisaré por aquí apenas esté disponible en Plex.',
-    download_started_tv: '✅ ¡Excelente! Descargando *{title}* ({season}) en *{language}*...\n\n⏳ Te avisaré por aquí apenas esté disponible en Plex.',
+    download_started_tv: '✅ ¡Excelente! Descargando *{title}* ({season}) en *{language}* con streaming progresivo...\n\n🍿 ¡Te avisaré en cuanto el Capítulo 1 esté listo para ver en Plex!',
     download_completed: '🍿 ¡Tu pedido ya está listo en Plex!\n\n🎬 *{title}* ({year}){extraInfo}\n¡A disfrutar! 🎉',
 
     // Missing episodes restoration
