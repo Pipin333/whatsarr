@@ -127,7 +127,7 @@ class ProgressiveStreamer {
     }
 
     // Filtrar archivos de video terminados (progress >= 0.999 o 1.0)
-    const videoExtensions = ['.mkv', '.mp4', '.avi', '.ts'];
+    const videoExtensions = ['.mkv', '.mp4', '.m4v', '.avi', '.ts', '.webm', '.mov'];
     const completedVideoFiles = files.filter(f => {
       const ext = path.extname(f.name || '').toLowerCase();
       if (!videoExtensions.includes(ext)) return false;
