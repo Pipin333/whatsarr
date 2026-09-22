@@ -1,6 +1,6 @@
 @echo off
-setlocal enabledelayedexpansion
-title Plex WhatsApp Bot - Control
+setlocal
+title WhatsArr - Control del Bot
 cd /d "%~dp0"
 
 set ARG=%~1
@@ -10,7 +10,7 @@ if /i "%ARG%"=="restart" goto do_restart
 if /i "%ARG%"=="status" goto do_status
 
 :check_status
-powershell -NoProfile -Command "try { $res = Invoke-RestMethod -Uri 'http://localhost:3001/health' -TimeoutSec 2; exit 0 } catch { exit 1 }"
+node scripts\service-manager.js is-running >nul 2>&1
 if %errorlevel% equ 0 (
     goto menu_running
 ) else (
@@ -21,7 +21,7 @@ if %errorlevel% equ 0 (
 cls
 color 0A
 echo ===================================================
-echo           Plex WhatsApp Bot - ONLINE
+echo           WhatsArr (Plex WhatsApp Bot) - ONLINE
 echo ===================================================
 echo  El servicio ya se encuentra corriendo en segundo plano.
 echo.
@@ -44,49 +44,53 @@ goto menu_running
 cls
 color 0B
 echo ===================================================
-echo          Iniciando Plex WhatsApp Bot
+echo          Iniciando WhatsArr (Plex Bot)
 echo ===================================================
 echo.
 echo Iniciando proceso en segundo plano...
 cscript //nologo start-background.vbs
-echo Esperando confirmacion de conexion...
-timeout /t 4 /nobreak >nul
+echo Esperando confirmacion de servicios...
+ping 127.0.0.1 -n 3 >nul
 
-powershell -NoProfile -Command "try { $res = Invoke-RestMethod -Uri 'http://localhost:3001/health' -TimeoutSec 3; Write-Host ' [OK] Servidor Web: ONLINE (http://localhost:3001)' -ForegroundColor Green; Write-Host (' [OK] WhatsApp: ' + ($res.whatsapp.connected ? 'CONECTADO' : 'Iniciando...')) -ForegroundColor Green; Write-Host (' [OK] Sonarr:   ' + ($res.sonarr.ok ? 'CONECTADO' : 'No disponible')) -ForegroundColor Green; Write-Host (' [OK] Radarr:   ' + ($res.radarr.ok ? 'CONECTADO' : 'No disponible')) -ForegroundColor Green } catch { Write-Host ' [!] El bot esta arrancando... puedes verificar en unos segundos.' -ForegroundColor Yellow }"
+node scripts\service-manager.js check
 
 echo.
 echo Abriendo Dashboard en tu navegador...
 start http://localhost:3001
 echo.
 echo Todo listo. Puedes cerrar esta ventana.
-timeout /t 5
+ping 127.0.0.1 -n 4 >nul
 exit /b 0
 
 :do_stop
 cls
 color 0C
 echo ===================================================
-echo          Deteniendo Plex WhatsApp Bot
+echo          Deteniendo WhatsArr (Plex Bot)
 echo ===================================================
 echo.
-powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*src/index.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Write-Host ('Detenido proceso PID: ' + $_.ProcessId) -ForegroundColor Yellow }"
+node scripts\service-manager.js stop
 echo.
 echo [OK] El servicio ha sido detenido.
-timeout /t 3
+ping 127.0.0.1 -n 3 >nul
 exit /b 0
 
 :do_restart
 cls
 color 0E
 echo ===================================================
-echo          Reiniciando Plex WhatsApp Bot
+echo          Reiniciando WhatsArr (Plex Bot)
 echo ===================================================
 echo.
 echo 1. Deteniendo instancias previas...
-powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*src/index.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
-timeout /t 2 /nobreak >nul
+node scripts\service-manager.js stop >nul 2>&1
+ping 127.0.0.1 -n 2 >nul
 echo 2. Iniciando servicio...
 goto do_start
+
+:do_status
+node scripts\service-manager.js check
+exit /b %errorlevel%
 
 :open_web
 start http://localhost:3001
