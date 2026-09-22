@@ -5,6 +5,7 @@ const config = require('./config');
 const db = require('./db');
 const arrService = require('./arr-service');
 const tmdb = require('./tmdb');
+const i18n = require('./i18n');
 
 // Buffer en memoria para los ultimos eventos de log
 const recentLogs = [];
@@ -81,11 +82,33 @@ class WebhookServer {
           count: config.allowedNumbers ? config.allowedNumbers.length : 0,
           numbers: (config.allowedNumbers || []).map(n => n.length > 4 ? `+${n.slice(0, 2)}***${n.slice(-4)}` : '***')
         },
+        language: i18n.getLanguage(),
+        supportedLanguages: i18n.getSupportedLanguages(),
         stats: {
           totalRequests: db.listRequests(1000).length,
           pendingRequests: db.listRequests(1000).filter(r => r.status === 'downloading').length
         }
       });
+    });
+
+    // 1.1 Configuración de Idioma (i18n)
+    this.app.get('/api/config/language', (req, res) => {
+      res.json({
+        success: true,
+        language: i18n.getLanguage(),
+        supported: i18n.getSupportedLanguages()
+      });
+    });
+
+    this.app.post('/api/config/language', (req, res) => {
+      const { language } = req.body;
+      const ok = i18n.setLanguage(language);
+      if (ok) {
+        addLog('info', `[Config] Idioma cambiado a: ${language}`);
+        res.json({ success: true, language: i18n.getLanguage() });
+      } else {
+        res.status(400).json({ success: false, error: 'Código de idioma no soportado. Usa "en" o "es".' });
+      }
     });
 
     // 2. Descargas activas en tiempo real desde qBittorrent
@@ -455,13 +478,11 @@ class WebhookServer {
 
     // 3. Notificar por WhatsApp
     if (this.whatsappClient && this.whatsappClient.isConnected()) {
-      const message = [
-        `🍿 *¡Tu pedido ya está listo en Plex!*`,
-        ``,
-        `🎬 *${pending.title}${pending.year ? ` (${pending.year})` : ''}*`,
-        extraDetails,
-        `✨ Ya se encuentra disponible en tu servidor para ver cuando quieras. ¡A disfrutar! 🎉`
-      ].filter(Boolean).join('\n');
+      const message = i18n.t('download_completed', {
+        title: pending.title,
+        year: pending.year || '',
+        extraInfo: extraDetails ? `\n${extraDetails}` : ''
+      });
 
       const targetJid = pending.chatJid || pending.userJid;
 

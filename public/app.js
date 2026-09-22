@@ -56,19 +56,41 @@ async function fetchStatus() {
     const wlIcon = document.getElementById('stat-whitelist-icon');
     if (wlElVal && data.whitelist) {
       if (data.whitelist.enabled) {
-        wlElVal.textContent = 'Activa';
+        wlElVal.textContent = 'Active';
         wlElVal.style.color = '#10b981';
-        wlElDesc.textContent = `${data.whitelist.count} número(s) autorizados`;
+        wlElDesc.textContent = `${data.whitelist.count} authorized contact(s)`;
         if (wlIcon) wlIcon.textContent = '🛡️';
       } else {
-        wlElVal.textContent = 'Abierta';
+        wlElVal.textContent = 'Open';
         wlElVal.style.color = '#94a3b8';
-        wlElDesc.textContent = 'Cualquier usuario puede pedir';
+        wlElDesc.textContent = 'Any contact can request';
         if (wlIcon) wlIcon.textContent = '🔓';
       }
     }
+
+    // Language selector sync
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect && data.language) {
+      langSelect.value = data.language;
+    }
   } catch (err) {
-    console.warn('Error obteniendo estado:', err);
+    console.warn('Error fetching status:', err);
+  }
+}
+
+async function changeLanguage(lang) {
+  try {
+    const res = await fetch('/api/config/language', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: lang })
+    });
+    const data = await res.json();
+    if (data.success) {
+      fetchStatus();
+    }
+  } catch (err) {
+    console.warn('Error changing language:', err);
   }
 }
 

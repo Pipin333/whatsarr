@@ -4,351 +4,271 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)]()
 [![Baileys](https://img.shields.io/badge/WhatsApp-Baileys%20v6.7-brightgreen.svg)](https://github.com/WhiskeySockets/Baileys)
+[![i18n](https://img.shields.io/badge/i18n-English%20%7C%20Spanish-orange.svg)]()
 
-Sistema automatizado de gestión multimedia que permite a cualquier familiar o amigo solicitar **películas y series directamente desde WhatsApp**. El bot busca la ficha técnica, envía el póster en alta resolución, ofrece un menú interactivo de idiomas (Latino, Castellano, Subtitulado), aplica límites de tamaño para no saturar el disco (10 GB máx películas / 3.5 GB máx capítulos), coordina las descargas mediante **Radarr**, **Sonarr**, **Prowlarr** y **qBittorrent**, refresca la biblioteca en **Plex Media Server** y envía un mensaje de confirmación automático cuando el contenido está listo para reproducir.
+An automated media management bot that enables friends and family to request **movies and TV shows directly via WhatsApp**. The bot resolves media metadata, sends high-resolution cover posters, offers an interactive audio/language menu (English/Original, Latin Spanish, Castilian Spanish), enforces size limits (10 GB max for movies / 3.5 GB max per TV episode), coordinates downloads through **Radarr**, **Sonarr**, **Prowlarr**, and **qBittorrent**, refreshes libraries in **Plex Media Server**, and sends an automated celebration notification when the media is ready to watch.
 
-Además, incluye un **Dashboard Web en tiempo real** (`http://localhost:3001`) para monitorear el estado de los servicios, ver las descargas activas de qBittorrent con barras de progreso y probar el motor de búsqueda difusa.
+Includes a **real-time Web Dashboard** (`http://localhost:3001`) to monitor service health, view active qBittorrent downloads with live progress bars, manage the phone whitelist, trigger missing episodes recovery, and test fuzzy matching.
 
 ---
 
-## 📐 Arquitectura del Sistema
+## 📐 System Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Cliente["📱 Usuario & Interfaz"]
-        A["WhatsApp (Familiar / Amigo)"]
+    subgraph Client["📱 User & Interfaces"]
+        A["WhatsApp (Family / Friends / Self)"]
         W["Web Dashboard UI (http://localhost:3001)"]
     end
 
-    subgraph Bot["🤖 Núcleo del Bot (Node.js Express)"]
+    subgraph Bot["🤖 Bot Core (Node.js Express)"]
         B["Baileys Multi-Device Client"]
-        F["Fuzzy Matcher (fuzzball + Normalización)"]
-        API["Express API Server (Puerto 3001)"]
-        DB[("Sesiones y Memoria JSON (data/)")]
+        LLM["Google Gemini AI / Local Normalizer"]
+        F["Release Scorer (Fuzzball + Rules Engine)"]
+        API["Express REST API (Port 3001)"]
+        DB[("Storage & Sessions (data/)")]
+        I18N["i18n Localization (EN / ES)"]
     end
 
-    subgraph Arr["🎬 Gestión & Descargas (*Arr Ecosystem)"]
-        R["Radarr (Películas - :7878)<br/>Filtro 10GB | HD-1080p"]
-        S["Sonarr (Series - :8989)<br/>Filtro 3.5GB/ep | HD-1080p"]
-        P["Prowlarr (Indexers - :9696)"]
-        Q["qBittorrent (Web UI - :8080)"]
+    subgraph Arr["🎬 Media Management & Indexers (*Arr Stack)"]
+        R["Radarr (Movies - :7878)<br/>10GB Max Filter | HD-1080p"]
+        S["Sonarr (TV Shows - :8989)<br/>3.5GB/ep Max | Multi-Season"]
+        P["Prowlarr (Indexers Manager - :9696)"]
+        Q["qBittorrent (Client WebUI - :8080)"]
     end
 
-    subgraph Media["🍿 Servidor Multimedia & Almacenamiento"]
-        DISK["Disco G:\Media (Peliculas / Series)"]
+    subgraph Media["🍿 Media Server & Storage"]
+        DISK["Local Storage (Movies / TV Shows)"]
         PLEX["Plex Media Server (:32400)"]
     end
 
-    %% Flujo de Solicitud
-    A -->|"1. 'quiero ver Gladiador 2'"| B
-    B --> F
-    F -->|"Busca en TMDB / Radarr / Sonarr"| R
-    F -->|"Póster + Menú de Idiomas (1, 2, 3)"| B
-    B -->|"Envía ficha y póster"| A
-    A -->|"2. '1' (Español Latino)"| B
-    B -->|"Agrega película con tag de idioma"| R
-    B -->|"O agrega serie monitoreada"| S
-    W -->|"Solicitud manual / Búsqueda"| API
+    %% Request Flow
+    A -->|"1. 'want to watch Gladiator 2' / '!request Dune'"| B
+    B --> LLM
+    LLM -->|"Extracts title, year, season, media_type"| F
+    F -->|"Search metadata via TMDB / Radarr / Sonarr"| R
+    B -->|"Sends poster + language menu"| A
+    A -->|"2. '1' (Original / English) or '2' (Spanish)"| B
+    B -->|"Adds movie or TV seasons"| R
+    B -->|"Or delegates TV seasons to"| S
+    W -->|"Live search / Request / Config"| API
     API --> R
     API --> S
 
-    %% Flujo de Descarga
+    %% Download Flow
     R --> P
     S --> P
-    P -->|"Envía torrent al cliente"| Q
-    Q -->|"Descarga completada"| DISK
-    DISK -->|"Importación de archivo"| R
-    DISK -->|"Importación de archivo"| S
+    P -->|"Dispatches best release"| Q
+    Q -->|"Download completes"| DISK
+    DISK -->|"Import & Rename"| R
+    DISK -->|"Import & Rename"| S
 
-    %% Flujo de Notificación
+    %% Notification Flow
     R -->|"3. Webhook POST /webhook"| API
     S -->|"3. Webhook POST /webhook"| API
-    API -->|"4. Refresca Biblioteca"| PLEX
-    API -->|"5. Notifica: '¡Listo en Plex!'"| B
-    B -->|"Mensaje con póster al usuario"| A
+    API -->|"4. Refreshes Library"| PLEX
+    API -->|"5. Formats localized alert via i18n"| I18N
+    I18N -->|"6. Sends 'Ready on Plex!' notification"| B
+    B -->|"WhatsApp alert with poster"| A
 ```
 
 ---
 
-## ✨ Características Principales
+## ✨ Key Features
 
-- 📱 **Atención Interactiva por WhatsApp (DMs y Grupos)**:
-  - Compatible con mensajes directos y grupos de WhatsApp donde participe el bot.
-  - Envía la carátula oficial en alta definición con sinopsis y reparto.
-  - Menú de selección interactivo por número asociado únicamente al usuario solicitante:
-    - `1`: 🇲🇽 Español Latino
-    - `2`: 🇪🇸 Español Castellano
-    - `3`: 🇬🇧 Idioma Original con Subtítulos
-    - `0`: Cancelar
-- 🛡️ **Whitelist de Números y Gestión en Web**:
-  - Configurable tanto en `.env` (`ALLOWED_NUMBERS`) como **directamente desde el Web Dashboard** (`http://localhost:3001`).
-  - Permite añadir o eliminar números y activar/desactivar la restricción al vuelo sin reiniciar.
-  - El bot ignora a usuarios no autorizados en **absoluto silencio**, sin entrometerse en conversaciones cotidianas.
-- 📺 **Selector de Temporadas para Series**:
-  - **En WhatsApp**: Puedes pedir una temporada directamente (ej: *"quiero ver Stranger Things temporada 4"* o *"descárgame Breaking Bad temp 2"*). Si no especificas temporada, el bot te presenta un menú interactivo para elegir si quieres la Temporada 1, la última temporada emitida o la serie completa.
-  - **En Web UI**: Al buscar series, dispones de un menú desplegable para elegir la temporada exacta a solicitar.
-  - En Sonarr se monitorea y descarga **únicamente** la temporada elegida, ahorrando espacio en disco.
-- ❌ **Cancelación de Descargas Activas en Vivo**:
-  - Botón `❌ Cancelar` en cada tarjeta de descarga del Web Dashboard para detener y eliminar cualquier torrent y sus archivos de qBittorrent de inmediato.
-- 🔄 **Reintento Inteligente de Descargas Fallidas o Colgadas**:
-  - Botón `🔄 Reintentar` individual en cada descarga y botón global `🔄 Reintentar Colgadas` en el encabezado.
-  - Detecta torrents con estado `stalledDL`, `metaDL`, `error` o sin semillas.
-  - Si la descarga proviene de Sonarr o Radarr, elimina el torrent muerto, **lo añade a la lista negra (blocklist)** para no volver a descargarlo y **dispara automáticamente una nueva búsqueda de releases alternativos**.
-  - Si es una descarga directa en qBittorrent, aplica recomprobación forzada, re-anuncio a todos los trackers y arranque forzado.
-  - Botón `🔄 Reintentar` en el historial de solicitudes para relanzar búsquedas directamente.
-- 🗣️ **Lenguaje Natural Inteligente (Anti Falsos Positivos)**:
-  - Admite peticiones naturales como *"quiero ver Gladiator 2"*, *"descárgame Inception"*, *"búscame The Batman"*.
-  - **Filtro gramatical**: Si la frase inicia con *"quiero ver"*, pero continúa con conjunciones o charlas cotidianas (*"si vamos al cine"*, *"que onda hoy"*, *"cómo estás"*), el bot detecta que es una conversación casual y se queda en silencio.
-- 🍿 **Detección Inmediata de Contenido Existente**:
-  - Si la película o serie ya está descargada en el disco / Plex, el bot responde de inmediato avisando que ya está disponible para ver, sin gastar ancho de banda ni re-descargar.
-  - Si ya está en la cola de descarga, informa su estado actual.
-- 🧠 **Motor de Búsqueda Difusa (`fuzzball`)**:
-  - Búsqueda tolerante a faltas ortográficas, acentos y variaciones de título (ej: *"Increibles 2"*, *"Gladiador 2"*, *"Intensamente 2"*).
-  - Ponderación de similitud léxica combinada con score de popularidad para acertar siempre en el título oficial.
-- ⚖️ **Límite Estricto de Tamaño**:
-  - **Películas**: Límite máximo de **10 GB** (Custom Format en Radarr con score `-10000` y perfil `HD-1080p`, bloqueando remuxes de 30-50 GB o 4K innecesarios).
-  - **Series**: Límite máximo de **3.5 GB por episodio**.
-- 🌐 **Web Dashboard Integrado (`http://localhost:3001`)**:
-  - **Estado en Vivo**: Monitoreo de conectividad con WhatsApp, Radarr, Sonarr, qBittorrent y Plex.
-  - **Descargas en Tiempo Real**: Barras de progreso con velocidad (KB/s, MB/s), tiempo estimado (ETA), peso y estado de qBittorrent.
-  - **Historial de Solicitudes**: Lista de pedidos recientes con póster, fecha, usuario solicitante y estado.
-  - **Buscador & Probador Difuso**: Búsqueda interactiva con visualización de scores para auditar el matching.
-  - **Acciones Rápidas**: Refresco manual de bibliotecas de Plex y visualizador de los últimos logs.
-- ⚡ **Ejecución Silenciosa en Segundo Plano**:
-  - Arranca sin ventanas de consola invasivas mediante script VBScript (`start-background.vbs`).
-  - Compatible con el inicio automático de Windows (`shell:startup`).
-  - Scripts de gestión con un solo clic: `status-bot.bat` y `stop-bot.bat`.
-- 🔔 **Notificaciones Automáticas End-to-End**:
-  - En cuanto la descarga termina y el archivo se importa a `G:\Media\...`, el bot refresca Plex y notifica al usuario en WhatsApp con la confirmación final.
+- 🌐 **Multi-Language Support (i18n)**:
+  - Supports **English (`en`)** and **Spanish (`es`)** out of the box.
+  - Switchable via `.env` (`BOT_LANGUAGE=en|es`), REST API, or live from the Web Dashboard.
+  - Automatically translates interactive WhatsApp menus, prompts, download progress updates, and error alerts.
+- 📱 **Interactive WhatsApp Requests**:
+  - Request media via private chats or self-notes ("Note to self").
+  - Sends official high-definition posters, synopsis, rating, and interactive numeric menus.
+  - **Group Chat Protection**: Completely ignores group chats (`@g.us`) to ensure zero accidental interruptions in family, study, or work groups.
+- 📺 **Multi-Season & Season Range Selector**:
+  - Download single seasons (e.g. *"season 4"* or *"s02"*), ranges (e.g. *"seasons 2-5"* or *"2 to 4"*), or entire series (*"all"*).
+  - Web UI dropdown lets you pick individual seasons or ranges.
+- 🎯 **Intelligent Release Scorer (Fuzzball)**:
+  - Real-time algorithmic evaluation of torrent releases based on string similarity, exact year matches, resolution preference (1080p), source quality (BluRay/Web), seeders count, and strict size caps.
+  - Automatically discards undesirable releases like CAM, Telesync, Artbooks, OSTs, or bloated remuxes.
+- 🩺 **Missing Episodes Restoration**:
+  - One-click rescan and automatic download of unmonitored or missing episodes in Sonarr.
+- 🛡️ **Access Control & Whitelist**:
+  - Restricts bot interactions to authorized phone numbers configured in `.env` (`ALLOWED_NUMBERS`) or live via Web Dashboard.
+  - Unauthorized messages are ignored in **complete silence**.
+- 🧹 **Queue Cleanup & Stalled Torrents Recovery**:
+  - Remove completed torrents from qBittorrent with one click or via WhatsApp (*"clear completed downloads"*), keeping files safely stored on disk.
+  - Smart retry for stalled/dead torrents: automatically blocklists bad releases in Radarr/Sonarr and triggers search for fresh alternatives.
 
 ---
 
-## 📁 Estructura del Proyecto
+## 📋 Prerequisites
 
-```text
-lively-volta/
-├── data/                         # Almacenamiento local persistente
-│   ├── auth_info_baileys/        # Credenciales de sesión de WhatsApp (QR)
-│   ├── requests.json             # Historial de peticiones realizadas
-│   ├── user_sessions.json        # Estados de conversación interactiva
-│   └── bot.log                   # Registro de actividad en segundo plano
-├── docs/
-│   └── GUIA_CONFIGURACION.md     # Guía detallada paso a paso de cada servicio
-├── public/                       # Frontend del Web Dashboard
-│   ├── index.html                # Interfaz de usuario moderna
-│   ├── styles.css                # Estilos oscuros (Dark Theme)
-│   └── app.js                    # Lógica de actualización asíncrona en vivo
-├── setup/                        # Scripts de instalación y configuración
-│   ├── install-services.ps1      # Instalador winget de qBittorrent, Radarr, etc.
-│   ├── install-background-task.ps1 # Registro de inicio automático con Windows
-│   └── uninstall-background-task.ps1 # Desinstalador de la tarea de inicio
-├── src/
-│   ├── index.js                  # Punto de entrada y orquestador principal
-│   ├── config.js                 # Carga de variables de entorno y validaciones
-│   ├── db.js                     # Gestor de base de datos JSON atómica
-│   ├── tmdb.js                   # Búsqueda difusa multi-fuente (fuzzball)
-│   ├── arr-service.js            # Cliente API para Radarr y Sonarr
-│   ├── webhook-server.js         # Servidor Express, API REST y webhooks
-│   └── whatsapp.js               # Cliente WhatsApp con Baileys
-├── test/                         # Scripts de prueba y simulación
-│   ├── test-search.js            # Test de búsqueda y scoring
-│   └── simulate-webhook.js       # Simulador de webhook de descarga
-├── .env                          # Variables de entorno (API keys, puertos, rutas)
-├── .env.example                  # Plantilla de configuración de ejemplo
-├── package.json                  # Dependencias y scripts de npm
-├── start-background.vbs          # Iniciador invisible en segundo plano
-├── start-bot.bat                 # Iniciador en ventana de consola (primer escaneo QR)
-├── status-bot.bat                # Comprobador de estado y apertura del Dashboard
-└── stop-bot.bat                  # Detención segura del proceso de Node.js
-```
+| Service | Default Port | Description |
+| :--- | :--- | :--- |
+| **Node.js** (v18+) | `3001` | Core bot server, API, and Web Dashboard |
+| **qBittorrent** | `8080` | Torrent downloader with Web UI enabled |
+| **Radarr** | `7878` | Movie manager and quality profiles |
+| **Sonarr** | `8989` | TV Series manager and multi-season tracking |
+| **Prowlarr** | `9696` | Torrent indexer proxy |
+| **Plex Media Server** | `32400` | Local media streaming server |
+
+> 💡 *On Windows, you can install qBittorrent, Radarr, Sonarr, and Prowlarr in one click by running `powershell -ExecutionPolicy Bypass -File .\setup\install-services.ps1` as Administrator.*
 
 ---
 
-## 🚀 Requisitos Previos
+## ⚙️ Quick Start
 
-1. **Windows 10 / 11** de 64 bits.
-2. **Node.js 18** o superior instalado ([nodejs.org](https://nodejs.org/)).
-3. **Plex Media Server** instalado y corriendo en `http://localhost:32400`.
-4. **qBittorrent** (con Web UI activada en el puerto `8080`).
-5. **Radarr** (puerto `7878`), **Sonarr** (puerto `8989`) y **Prowlarr** (puerto `9696`).
-
-> 💡 *Puedes instalar qBittorrent, Radarr, Sonarr y Prowlarr automáticamente ejecutando `setup/install-services.ps1` en PowerShell como Administrador.*
-
----
-
-## ⚙️ Configuración Inicial
-
-### 1. Clonar o Descargar el Proyecto
-Abre tu terminal en la carpeta del proyecto e instala las dependencias:
+### 1. Install Dependencies
+Open your terminal in the project directory:
 ```powershell
 npm install
 ```
 
-### 2. Configurar el archivo `.env`
-Copia el archivo `.env.example` a `.env` y completa los valores correspondientes:
+### 2. Configure Environment (`.env`)
+Copy `.env.example` to `.env` and fill in your details:
+```powershell
+cp .env.example .env
+```
 
 ```env
-# Puerto del servidor local para API, Webhooks y Dashboard UI
+# Local server port for API and Web Dashboard
 PORT=3001
 
-# Rutas de almacenamiento en disco para tu contenido multimedia
-MOVIES_PATH=C:\Media\Peliculas
-SERIES_PATH=C:\Media\Series
+# Bot language ('en' for English, 'es' for Spanish)
+BOT_LANGUAGE=en
 
-# Configuración de Radarr (Películas)
+# Media storage paths on disk
+MOVIES_PATH=C:\Media\Movies
+SERIES_PATH=C:\Media\TV
+
+# Radarr (Movies)
 RADARR_URL=http://localhost:7878
-RADARR_API_KEY=tu_api_key_de_radarr
+RADARR_API_KEY=your_radarr_api_key
 
-# Configuración de Sonarr (Series)
+# Sonarr (TV Shows)
 SONARR_URL=http://localhost:8989
-SONARR_API_KEY=tu_api_key_de_sonarr
+SONARR_API_KEY=your_sonarr_api_key
 
-# Configuración de Prowlarr (Búsqueda e Indexers)
+# Prowlarr (Indexers)
 PROWLARR_URL=http://localhost:9696
-PROWLARR_API_KEY=tu_api_key_de_prowlarr
+PROWLARR_API_KEY=your_prowlarr_api_key
 
-# Configuración de qBittorrent WebUI
+# qBittorrent WebUI
 QBITTORRENT_URL=http://127.0.0.1:8080
 
-# Configuración de Plex Media Server
+# Plex Media Server
 PLEX_URL=http://localhost:32400
-PLEX_TOKEN=tu_plex_token_opcional
+PLEX_TOKEN=your_plex_token_optional
 
-# (Recomendado) Google Gemini AI para normalización de lenguaje natural
-GEMINI_API_KEY=tu_gemini_api_key
+# (Recommended) Google Gemini AI API key for natural language request parsing
+GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-3.6-flash
 
-# (Opcional) TMDB API Key - Si se deja vacío usa búsqueda integrada de Radarr/Sonarr
+# (Optional) TMDB API Key - Defaults to Sonarr/Radarr search if omitted
 TMDB_API_KEY=
 
-# Palabras clave que activan el bot en WhatsApp
-TRIGGER_KEYWORDS=quiero ver,!pedir,!ver,descargar,búscame,buscame
+# Trigger keywords for activating the bot via WhatsApp
+TRIGGER_KEYWORDS=want to watch,download,!request,!get,quiero ver,!pedir,!ver,descargar
 
-# Whitelist de números autorizados (separados por coma)
-# Ejemplo: 56912345678, +54 9 11 1234-5678
-# Si se deja vacío, el bot opera en modo abierto (atiende a cualquiera).
+# Authorized phone numbers whitelist (comma-separated, international format without symbols)
+# Example: 15551234567,447911123456
+# Leave empty for open mode
 ALLOWED_NUMBERS=
 ```
 
-### 3. Vincular WhatsApp por Primera Vez
-Para escanear el código QR con el celular:
-1. Ejecuta en tu consola:
+### 3. Pair WhatsApp
+To link your WhatsApp account via QR code:
+1. Run in your terminal:
    ```powershell
    npm start
-   # o ejecuta iniciar-bot.bat
    ```
-2. En la terminal aparecerá un código QR.
-3. En WhatsApp (desde tu teléfono secundario o tu propio número):
-   - Ve a **Ajustes** $\rightarrow$ **Dispositivos vinculados** $\rightarrow$ **Vincular un dispositivo**.
-   - Escanea el código QR de la pantalla.
-4. Una vez que la consola confirme `🎉 ¡WHATSAPP CONECTADO EXITOSAMENTE!`, ya puedes cerrar la ventana. Las credenciales quedarán guardadas permanentemente en `data/auth_info_baileys/`.
+2. Scan the displayed QR code on your phone (**WhatsApp** $\rightarrow$ **Linked Devices** $\rightarrow$ **Link a Device**).
+3. Once connected, your credentials are saved in `data/auth_info_baileys/`. You can close the terminal.
 
 ---
 
-## 🔌 Configuración de Servicios Externos
+## 🖥️ Management & Control (One Script)
 
-### A. qBittorrent
-1. Ve a **Herramientas** $\rightarrow$ **Opciones** $\rightarrow$ **Web UI**.
-2. Marca **Interfaz de usuario web (Control remoto)** en el puerto `8080`.
-3. Usuario: `admin`, Contraseña: la que definas (por defecto `adminadmin`).
-4. En **Conexión**, se recomienda desmarcar **Usar UPnP** si tu router tiene problemas de asignación de puertos en la red local.
-
-### B. Radarr y Sonarr: Webhook hacia el Bot
-Para que el bot sepa cuándo finalizó la descarga y avise al familiar:
-1. En Radarr (y lo mismo en Sonarr), ve a: **Settings** $\rightarrow$ **Connect** $\rightarrow$ botón `+` $\rightarrow$ **Webhook**.
-2. **Name**: `Plex WhatsApp Bot`
-3. **Triggers**:
-   - ✅ **On Download**
-   - ✅ **On Upgrade**
-4. **URL**: `http://localhost:3001/webhook`
-5. **Method**: `POST`
-6. Haz clic en **Test** y luego en **Save**.
-
-### C. Límite de Tamaño a 10 GB en Radarr
-Para evitar descargar archivos excesivamente pesados (como remuxes 4K de 20-30 GB):
-1. **Perfil de Calidad**: En **Settings** $\rightarrow$ **Profiles**, selecciona `HD-1080p` como perfil predeterminado y desmarca calidades 4K/2160p.
-2. **Custom Format**: En **Settings** $\rightarrow$ **Custom Formats**, añade una condición `SizeSpecification` con mínimo `10` GB y máximo `500` GB, nombrada *"Excede 10GB"*.
-3. En tu perfil de calidad, asígnale una puntuación de `-10000` a ese formato y coloca `Minimum Custom Format Score: 0`.
-
----
-
-## 🖥️ Ejecución y Control (Un Solo Script)
-
-### Script Único: `iniciar-bot.bat`
-Para iniciar, reiniciar, consultar el estado o detener el bot, **solo necesitas hacer doble clic en `iniciar-bot.bat`**:
-- **Si el bot está detenido**: Lo inicia automáticamente en segundo plano (sin ventanas molestas), comprueba la conexión con WhatsApp/Sonarr/Radarr y abre el Dashboard Web (`http://localhost:3001`).
-- **Si el bot ya está corriendo**: Despliega un menú interactivo para abrir el panel web, reiniciar el servicio, ver registros en vivo (`logs`) o detenerlo por completo.
+### Single Controller: `iniciar-bot.bat`
+Double-click `iniciar-bot.bat` to manage the service:
+- **If stopped**: Starts the background process invisibly, tests service health, and launches the Web UI Dashboard (`http://localhost:3001`).
+- **If running**: Displays an interactive menu to view live logs, restart, open the dashboard, or stop the service.
 
 ```cmd
-# Comandos rápidos por terminal (opcional):
-iniciar-bot.bat start    # Arranca el servicio en segundo plano
-iniciar-bot.bat restart  # Reinicia el servicio
-iniciar-bot.bat stop     # Detiene el servicio
+# Command line options:
+iniciar-bot.bat start    # Start background process
+iniciar-bot.bat restart  # Restart process
+iniciar-bot.bat stop     # Stop process
 ```
 
-### Inicio Automático con Windows
-Para que el bot arranque automáticamente cada vez que inicies sesión en tu PC sin que tengas que hacer nada:
-1. Abre **PowerShell** en esta carpeta y ejecuta:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\setup\install-background-task.ps1
-   ```
-2. Esto creará el acceso directo invisible en `shell:startup`. Si deseas desinstalarlo en el futuro, ejecuta `uninstall-background-task.ps1`.
+### Windows Auto-Start on Boot (Optional)
+To run the bot silently in the background whenever Windows starts:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup\install-background-task.ps1
+```
+*(To uninstall later, run `setup/uninstall-background-task.ps1`).*
 
 ---
 
-## 💬 Uso del Bot por WhatsApp
+## 💬 WhatsApp Usage Examples
 
-| Situación | Mensaje del Usuario | Comportamiento / Respuesta del Bot |
+| Situation | User Message (English / Spanish) | Bot Response / Action |
 | :--- | :--- | :--- |
-| **Petición nueva** | `quiero ver Gladiador 2`<br/>o `descárgame Inception`<br/>o `búscame Stranger Things` | Envía la portada oficial en HD, sinopsis, calificación y menú interactivo de idiomas (1, 2, 3, 0). |
-| **Elección de idioma** | `1` | *"✅ ¡Excelente! Buscando y agregando en Español Latino 🇲🇽 a la cola de descarga..."* |
-| **Descarga terminada** | *(Automático)* | *"🍿 ¡Tu pedido ya está listo en Plex! 🎬 Gladiator II (2024). ¡A disfrutar! 🎉"* |
-| **Película ya en Plex** | `quiero ver Los Increíbles 2` | *"🍿 ¡Incredibles 2 (2018) ya se encuentra en tu servidor Plex! Ya está descargada y lista para ver."* *(No re-descarga).* |
-| **Película en descarga** | `quiero ver Dune 2` *(si ya está en qBittorrent)* | *"⏳ Dune: Part Two ya fue solicitada y se encuentra actualmente descargándose."* |
-| **Charla cotidiana** | *"quiero ver si vamos al cine hoy"*, *"quiero ver qué onda"* | **Silencio absoluto.** El filtro detecta la conjunción coloquial y no interrumpe la conversación. |
-| **Contacto no autorizado** | Cualquier mensaje de un número fuera de la whitelist | **Silencio absoluto.** Ignorado sin enviar notificaciones ni alertar de la existencia del bot. |
+| **New Movie** | `I want to watch Gladiator 2`<br/>`quiero ver Gladiador 2` | Sends HD poster, synopsis, score, and audio options (`1`, `2`, `3`, `0`). |
+| **Audio Selection** | `1` | *"✅ Great! Adding in Original Audio 🇺🇸 to download queue..."* |
+| **Single Season** | `Stranger Things season 4`<br/>`Stranger Things temp 4` | Downloads Season 4 only, avoiding full series downloads. |
+| **Season Range** | `download Loki seasons 1 to 2`<br/>`bájate Loki temporadas 1-2` | Automatically parses `1-2` and monitors requested seasons in Sonarr. |
+| **Download Ready** | *(Automatic alert)* | *"🍿 Your request is ready on Plex! 🎬 Gladiator II (2024). Enjoy watching! 🎉"* |
+| **Already in Plex** | `I want to watch Incredibles 2` | *"🍿 Incredibles 2 (2018) is already available on your Plex server! Ready to watch."* |
+| **Already in Queue** | `want to watch Dune 2` *(if downloading)* | *"⏳ Dune: Part Two has already been requested and is currently downloading."* |
+| **Queue Cleanup** | `clear completed downloads`<br/>`limpiar completadas` | Cleans finished items from qBittorrent queue while preserving video files on disk. |
+| **Missing Episodes** | `restore missing episodes of Top Gear`<br/>`faltan episodios de Top Gear` | Triggers disk rescan and searches for missing episodes in Sonarr. |
+| **Casual Chat** | *"see you tomorrow"*, *"joya"*, *"okay"* | **Complete silence.** Anti-false-positive filters prevent accidental responses. |
+| **Group Chats** | Any message in WhatsApp groups | **Complete silence.** Group chats are strictly blocked for user privacy. |
 
 ---
 
-## 🌐 Endpoints de la API REST
+## 🌐 REST API Endpoints
 
-El servidor Express en el puerto `3001` expone los siguientes endpoints:
+The Express server on port `3001` provides:
 
-- `GET /health`: Estado general del bot, conexión de WhatsApp y de Radarr/Sonarr.
-- `GET /api/status`: Diagnóstico detallado en tiempo real de todos los microservicios (WhatsApp, Radarr, Sonarr, qBittorrent, Plex, rutas, whitelist y estadísticas).
-- `GET /api/downloads`: Listado en vivo de torrents activos en qBittorrent con progreso porcentual, tasa de transferencia, semillas y banderas de estado (`is_stalled`, `is_error`).
-- `POST /api/downloads/cancel`: Cancelar y eliminar una descarga activa y sus archivos en qBittorrent (`{ hash, deleteFiles }`).
-- `POST /api/downloads/retry`: Reintentar una descarga específica. Si proviene de Sonarr/Radarr, elimina el torrent, lo bloquea en lista negra y busca un nuevo release (`{ hash }`).
-- `POST /api/downloads/retry-stalled`: Escanear y reintentar en lote todas las descargas colgadas, sin semillas o en error.
-- `POST /api/requests/retry`: Reiniciar la búsqueda en Radarr/Sonarr para un pedido del historial (`{ id }`).
-- `GET /api/requests`: Historial de pedidos registrados en `data/requests.json`.
-- `GET /api/whitelist`: Consulta de la lista completa de números autorizados y estado del modo restringido.
-- `POST /api/whitelist/add`: Añadir un número a la whitelist (`{ number, label }`).
-- `POST /api/whitelist/remove`: Quitar un número de la whitelist (`{ number }`).
-- `POST /api/whitelist/toggle`: Habilitar o deshabilitar la restricción de whitelist (`{ enabled }`).
-- `GET /api/search?q=nombre`: Búsqueda interactiva con scoring difuso.
-- `GET /api/series/seasons?title=nombre`: Consulta de temporadas disponibles para una serie en Sonarr.
-- `POST /api/request-media`: Solicitar una película o serie (con `seasonSelection`) desde la interfaz web.
-- `POST /api/plex/refresh`: Forzar el escaneo inmediato de las bibliotecas de Plex.
-- `GET /api/logs`: Últimas 50 líneas del archivo de registro `data/bot.log`.
-- `POST /webhook`: Receptor del payload de descarga completada emitido por Radarr o Sonarr.
-
----
-
-## 🔊 Nota Técnica: Configuración de Audio 3.1 / 5.1
-
-Si cuentas con un sistema de parlantes como los **Logitech X-540** configurados en modo **3.1** (altavoces frontales izquierdo, central y derecho + subwoofer, sin los traseros):
-
-1. **Configuración en Windows**:
-   - Presiona `Win + R`, escribe `mmsys.cpl` y presiona Enter.
-   - Selecciona tu salida de audio $\rightarrow$ clic en **Configurar**.
-   - Elige **5.1 Envolvente** y en la pantalla de altavoces opcionales **desmarca los altavoces traseros/envolventes**.
-   - De este modo, Windows mezclará automáticamente los efectos traseros en los parlantes frontales, manteniendo el canal central exclusivo para las voces nítidas.
-2. **Botón Matrix en el altavoz central**: Mantén el botón *Matrix* **apagado** cuando uses los 3 cables de colores (Verde, Negro, Naranja) a la tarjeta de sonido de la PC.
-3. **En reproductores (VLC)**: En **Audio** $\rightarrow$ **Dispositivo de audio**, selecciona `5.1` para que el canal central dedicado maneje todos los diálogos sin pérdida de volumen.
+- `GET /health`: Overall health, WhatsApp connection, and Radarr/Sonarr status.
+- `GET /api/status`: Complete diagnostics for all services, download metrics, paths, and whitelist.
+- `GET /api/config/language`: Returns current active bot language (`en` or `es`) and supported languages.
+- `POST /api/config/language`: Live update of bot language (`{ "language": "en" | "es" }`).
+- `GET /api/downloads`: Live list of qBittorrent torrents with progress, speed, seeders, and status flags.
+- `POST /api/downloads/cancel`: Cancel and remove a torrent and its files (`{ "hash": "...", "deleteFiles": true }`).
+- `POST /api/downloads/retry`: Smart retry for an individual download (blocklists dead torrent and searches new release).
+- `POST /api/downloads/retry-stalled`: Batch retry for all stalled, slow, or seedless torrents.
+- `POST /api/requests/retry`: Restart search in Radarr/Sonarr for a previous request.
+- `GET /api/requests`: Complete request history log.
+- `GET /api/whitelist`: Whitelist status and authorized numbers list.
+- `POST /api/whitelist/add`: Add a contact (`{ "number": "...", "label": "..." }`).
+- `POST /api/whitelist/remove`: Remove an authorized contact (`{ "number": "..." }`).
+- `POST /api/whitelist/toggle`: Enable/disable whitelist enforcement (`{ "enabled": true }`).
+- `GET /api/search?q=query`: Interactive search with fuzzy scoring.
+- `GET /api/series/seasons?title=name`: Retrieve available seasons for a show from Sonarr.
+- `POST /api/request-media`: Request movie or series (with `seasonSelection`) directly via Web UI.
+- `POST /api/plex/refresh`: Force Plex library scan immediately.
+- `GET /api/logs`: Last 50 log lines from `data/bot.log`.
+- `POST /webhook`: Webhook receiver for Radarr and Sonarr download events.
 
 ---
 
-## 📄 Licencia
+## 🔊 Technical Note: 3.1 / 5.1 Audio Configuration
 
-Proyecto distribuido bajo la licencia MIT. Siéntete libre de adaptarlo y modificarlo a tu gusto.
+If using a multi-speaker system (e.g. **Logitech X-540**) configured in **3.1 mode** (Front Left, Center, Front Right + Subwoofer, without rear satellites):
+
+1. **Windows Sound Settings**:
+   - Press `Win + R`, type `mmsys.cpl`, and hit Enter.
+   - Select your output device $\rightarrow$ **Configure**.
+   - Choose **5.1 Surround**, and on the optional speakers step, **uncheck rear/surround speakers**.
+   - Windows will automatically downmix rear audio channels into front speakers while keeping the center channel dedicated to crisp voice dialogue.
+2. **Matrix Mode**: Keep the *Matrix* button **off** on the speaker console when using 3 direct color-coded 3.5mm jacks (Green, Black, Orange) to your sound card.
+3. **Media Players (VLC)**: In **Audio** $\rightarrow$ **Audio Device**, select `5.1` to route dialogue directly to the center speaker.
+
+---
+
+## 📄 License
+
+This project is open-source under the [MIT License](LICENSE).

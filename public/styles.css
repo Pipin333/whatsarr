@@ -66,6 +66,29 @@ body {
   color: var(--text-muted);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.lang-select {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.lang-select:hover {
+  border-color: var(--plex-gold);
+}
+
 .status-badges {
   display: flex;
   gap: 0.6rem;

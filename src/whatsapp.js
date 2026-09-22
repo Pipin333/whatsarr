@@ -12,6 +12,7 @@ const tmdb = require('./tmdb');
 const arrService = require('./arr-service');
 const llmNormalizer = require('./llm-normalizer');
 const releaseScorer = require('./release-scorer');
+const i18n = require('./i18n');
 
 class WhatsAppBot {
   constructor() {
@@ -153,23 +154,21 @@ class WhatsAppBot {
       }
     }
 
-    // 1.1 Comprobar comandos directos de gestión de descargas
-    if (/(?:limpiar|borrar|quitar|eliminar)\s+(?:las\s+)?descargas\s+completadas|(?:limpiar|borrar|quitar)\s+completadas/i.test(text)) {
+    // 1.1 Comprobar comandos directos de gestión de descargas (ES / EN)
+    if (/(?:limpiar|borrar|quitar|eliminar)\s+(?:las\s+)?descargas\s+completadas|(?:limpiar|borrar|quitar)\s+completadas|clear\s+(?:completed\s+)?downloads/i.test(text)) {
       try {
         const result = await arrService.clearCompletedDownloads(false);
-        let reply = `🧹 *Limpieza de Descargas Completadas*\n\n`;
         if (result.count > 0) {
-          reply += `Se eliminaron *${result.count}* descarga(s) de la lista de qBittorrent:\n`;
-          result.titles.slice(0, 5).forEach(t => { reply += `• ${t}\n`; });
-          if (result.titles.length > 5) reply += `_...y ${result.titles.length - 5} más_\n`;
-          reply += `\n💾 *Nota:* Los archivos de video se conservaron en tu disco duro.`;
+          let items = result.titles.slice(0, 5).map(t => `• ${t}`).join('\n');
+          if (result.titles.length > 5) items += `\n_...and ${result.titles.length - 5} more_`;
+          const reply = `${i18n.t('clean_completed_title')}\n\n${i18n.t('clean_completed_count', { count: result.count, items })}`;
+          await this.sendMessage(remoteJid, reply);
         } else {
-          reply += `No hay descargas completadas en la cola de qBittorrent.`;
+          await this.sendMessage(remoteJid, i18n.t('clean_completed_none'));
         }
-        await this.sendMessage(remoteJid, { text: reply });
         return;
       } catch (err) {
-        await this.sendMessage(remoteJid, { text: `⚠️ Error al limpiar descargas completadas: ${err.message}` });
+        await this.sendMessage(remoteJid, i18n.t('clean_completed_error', { error: err.message }));
         return;
       }
     }
@@ -315,10 +314,7 @@ class WhatsAppBot {
     }
 
     if (!results || results.length === 0) {
-      await this.sendMessage(
-        remoteJid,
-        `😕 No encontré ninguna película o serie que coincida con "*${query}*".\nIntenta escribir el título exacto.`
-      );
+      await this.sendMessage(remoteJid, i18n.t('no_results', { query }));
       return;
     }
 
@@ -331,7 +327,7 @@ class WhatsAppBot {
         const status = await arrService.checkMovieStatus(media);
         if (status.exists) {
           if (status.hasFile) {
-            const msg = `🍿 *¡${media.title}${yearLabel}* ya se encuentra en tu servidor Plex!\n\n✨ Ya está descargada y lista en tu biblioteca para ver ahora mismo sin esperar. ¡A disfrutar! 🎉`;
+            const msg = i18n.t('already_in_plex', { title: media.title, year: media.year || '' });
             if (media.posterUrl) {
               await this.sendImage(remoteJid, media.posterUrl, msg);
             } else {
@@ -339,17 +335,14 @@ class WhatsAppBot {
             }
             return;
           } else {
-            await this.sendMessage(
-              remoteJid,
-              `⏳ *${media.title}${yearLabel}* ya fue solicitada y se encuentra actualmente en proceso de descarga en qBittorrent.\n\nTe avisaremos por aquí apenas termine. 🍿`
-            );
+            await this.sendMessage(remoteJid, i18n.t('already_downloading', { title: media.title }));
             return;
           }
         }
       } else if (media.type === 'series' || media.type === 'tv') {
         const status = await arrService.checkSeriesStatus(media);
         if (status.exists && status.hasFile && !targetSeason && !targetEpisode) {
-          const msg = `🍿 *¡${media.title}${yearLabel}* ya tiene episodios disponibles en tu servidor Plex!\n\n✨ Ya puedes verla en tu biblioteca. Si deseas una temporada específica, puedes pedirla como ej: "*quiero ver ${media.title} temporada 4*". ¡A disfrutar! 🎉`;
+          const msg = i18n.t('already_in_plex', { title: media.title, year: media.year || '' });
           if (media.posterUrl) {
             await this.sendImage(remoteJid, media.posterUrl, msg);
           } else {
@@ -377,15 +370,16 @@ class WhatsAppBot {
       console.warn('[WhatsApp] Error consultando Prowlarr/Fuzzball:', err.message);
     }
 
-    const typeLabel = media.type === 'movie' ? 'Película 🎬' : 'Serie 📺';
-    const ratingLabel = media.voteAverage ? `⭐ Calificación: *${media.voteAverage}/10*\n` : '';
-    const overview = media.overview ? `📖 *Sinopsis:* ${media.overview.slice(0, 220)}${media.overview.length > 220 ? '...' : ''}\n` : '';
+    const isEN = i18n.getLanguage() === 'en';
+    const typeLabel = media.type === 'movie' ? (isEN ? 'Movie 🎬' : 'Película 🎬') : (isEN ? 'TV Series 📺' : 'Serie 📺');
+    const ratingLabel = media.voteAverage ? `⭐ ${i18n.t('rating')}: *${media.voteAverage}/10*\n` : '';
+    const overview = media.overview ? `📖 ${media.overview.slice(0, 220)}${media.overview.length > 220 ? '...' : ''}\n` : '';
 
     let releaseSnippet = '';
     if (bestRelease) {
       const sizeGB = (bestRelease.release.size / (1024 * 1024 * 1024)).toFixed(1);
       const seeds = bestRelease.release.seeders || 0;
-      releaseSnippet = `🎯 *Release óptimo encontrado (${bestRelease.score}/100)*:\n📦 _${bestRelease.release.title}_\n💾 ${sizeGB} GB | 🌱 ${seeds} semillas\n\n`;
+      releaseSnippet = `🎯 *${isEN ? 'Optimal Release Found' : 'Release óptimo encontrado'} (${bestRelease.score}/100)*:\n📦 _${bestRelease.release.title}_\n💾 ${sizeGB} GB | 🌱 ${seeds} ${isEN ? 'seeds' : 'semillas'}\n\n`;
     }
 
     // Si es una serie y no se especificó temporada ni episodio, preguntar qué temporada desea
@@ -401,24 +395,17 @@ class WhatsAppBot {
           chatJid: remoteJid
         });
 
-        const firstSeason = seasons[0].seasonNumber;
-        const lastSeason = seasons[seasons.length - 1].seasonNumber;
-
-        let seasonsGuide = '';
-        if (seasons.length <= 3) {
-          const list = seasons.map(s => `• *${s.seasonNumber}* (Temporada ${s.seasonNumber})`).join('\n');
-          seasonsGuide = `¿Qué temporada deseas descargar?\n${list}\n• *todas* (Serie completa)`;
-        } else {
-          seasonsGuide = `Esta serie cuenta con *${seasons.length} temporadas* (T${firstSeason} a T${lastSeason}).\n\n¿Qué temporada deseas descargar?\n• Escribe el *número* de temporada (ej: *1*, *2*, *3*, *${lastSeason}*)\n• O un *rango* (ej: *1-3*, *2-5*)\n• O responde *todas* para la serie completa`;
-        }
+        const seasonGuide = i18n.t('season_prompt', {
+          title: media.title,
+          totalSeasons: seasons.length
+        });
 
         const seasonCaption = [
           `*${media.title}${yearLabel}* [${typeLabel}]`,
           ratingLabel,
           releaseSnippet,
           overview,
-          seasonsGuide,
-          `\n0️⃣ Cancelar`
+          seasonGuide
         ].filter(Boolean).join('\n');
 
         if (media.posterUrl) {
@@ -455,11 +442,7 @@ class WhatsAppBot {
       ratingLabel,
       releaseSnippet,
       overview,
-      `¿En qué idioma la prefieres? Responde con el número:`,
-      `1️⃣ Español Latino 🇲🇽`,
-      `2️⃣ Español Castellano 🇪🇸`,
-      `3️⃣ Idioma Original con Subtítulos 🇬🇧`,
-      `0️⃣ Cancelar / No es esta`
+      i18n.t('choose_language')
     ].filter(Boolean).join('\n');
 
     if (media.posterUrl) {
@@ -524,9 +507,9 @@ class WhatsAppBot {
     const media = session.media;
     const seasons = session.availableSeasons || [];
 
-    if (cleanText === '0' || cleanText.includes('cancelar') || cleanText.includes('no es')) {
+    if (cleanText === '0' || cleanText.includes('cancel') || cleanText.includes('no es')) {
       db.clearSession(senderJid);
-      await this.sendMessage(remoteJid, `❌ Solicitud de "*${media.title}*" cancelada.`);
+      await this.sendMessage(remoteJid, i18n.t('request_cancelled'));
       return true;
     }
 
@@ -539,7 +522,7 @@ class WhatsAppBot {
     // 1. Si el usuario escribe "todas", "toda", "all", "completa", "serie completa"
     if (/^(?:todas?|all|completa|serie completa)$/i.test(cleanText) || cleanText.includes('toda') || cleanText.includes('complet')) {
       selectedSeason = 'all';
-      selectedSeasonLabel = 'Todas las temporadas';
+      selectedSeasonLabel = i18n.t('all_seasons');
     } else {
       // 2. Parsear el número o rango de temporadas (ej: "3", "2-5", "1, 3")
       const parsedSeasons = arrService.parseSeasonSelection(cleanText);
@@ -550,10 +533,7 @@ class WhatsAppBot {
     }
 
     if (!selectedSeason) {
-      await this.sendMessage(
-        remoteJid,
-        `⚠️ Por favor selecciona una temporada válida para "*${media.title}*":\n• Escribe el *número de temporada* deseada (ej: *1*, *2*, *3*, *${lastSeason}*)\n• Un rango (ej: *1-3*)\n• O *todas* para descargar la serie completa\n• *0* para Cancelar`
-      );
+      await this.sendMessage(remoteJid, i18n.t('invalid_season'));
       return true;
     }
 
@@ -566,13 +546,9 @@ class WhatsAppBot {
     });
 
     const caption = [
-      `✅ Has elegido: *${media.title}* - *${selectedSeasonLabel}*`,
-      `\n¿En qué idioma la prefieres? Responde con el número:`,
-      `1️⃣ Español Latino 🇲🇽`,
-      `2️⃣ Español Castellano 🇪🇸`,
-      `3️⃣ Idioma Original con Subtítulos 🇬🇧`,
-      `0️⃣ Cancelar`
-    ].join('\n');
+      `✅ *${media.title}* - *${selectedSeasonLabel}*`,
+      i18n.t('choose_language')
+    ].join('\n\n');
 
     await this.sendMessage(remoteJid, caption);
     return true;
@@ -584,39 +560,60 @@ class WhatsAppBot {
     const selectedSeason = session.selectedSeason || 'all';
     const seasonLabel = session.selectedSeasonLabel ? ` (${session.selectedSeasonLabel})` : (selectedSeason && selectedSeason !== 'all' ? ` (Temporada ${selectedSeason})` : '');
 
-    if (cleanText === '0' || cleanText.includes('cancelar') || cleanText.includes('no es')) {
+    if (cleanText === '0' || cleanText.includes('cancel') || cleanText.includes('no es')) {
       db.clearSession(senderJid);
-      await this.sendMessage(remoteJid, `❌ Solicitud de "*${media.title}*" cancelada.`);
+      await this.sendMessage(remoteJid, i18n.t('request_cancelled'));
       return true;
     }
 
     let languageChoice = null;
     let languageLabel = '';
 
-    if (cleanText === '1' || cleanText.includes('latino')) {
-      languageChoice = 'latino';
-      languageLabel = 'Español Latino 🇲🇽';
-    } else if (cleanText === '2' || cleanText.includes('castellano') || cleanText.includes('españa')) {
-      languageChoice = 'castellano';
-      languageLabel = 'Español Castellano 🇪🇸';
-    } else if (cleanText === '3' || cleanText.includes('sub') || cleanText.includes('original') || cleanText.includes('ingles')) {
-      languageChoice = 'subtitulado';
-      languageLabel = 'Original con Subtítulos 🇬🇧';
+    const isEN = i18n.getLanguage() === 'en';
+    if (isEN) {
+      if (cleanText === '1' || cleanText.includes('english') || cleanText.includes('original')) {
+        languageChoice = 'subtitulado';
+        languageLabel = i18n.t('lang_original');
+      } else if (cleanText === '2' || cleanText.includes('latino')) {
+        languageChoice = 'latino';
+        languageLabel = i18n.t('lang_latino');
+      } else if (cleanText === '3' || cleanText.includes('castellano') || cleanText.includes('spanish')) {
+        languageChoice = 'castellano';
+        languageLabel = i18n.t('lang_castellano');
+      }
     } else {
-      await this.sendMessage(
-        remoteJid,
-        `⚠️ Por favor responde con:\n*1* para Latino 🇲🇽\n*2* para Castellano 🇪🇸\n*3* para Subtitulado 🇬🇧\n*0* para Cancelar`
-      );
+      if (cleanText === '1' || cleanText.includes('latino')) {
+        languageChoice = 'latino';
+        languageLabel = i18n.t('lang_latino');
+      } else if (cleanText === '2' || cleanText.includes('castellano') || cleanText.includes('españa')) {
+        languageChoice = 'castellano';
+        languageLabel = i18n.t('lang_castellano');
+      } else if (cleanText === '3' || cleanText.includes('sub') || cleanText.includes('original') || cleanText.includes('ingles')) {
+        languageChoice = 'subtitulado';
+        languageLabel = i18n.t('lang_original');
+      }
+    }
+
+    if (!languageChoice) {
+      await this.sendMessage(remoteJid, i18n.t('invalid_option'));
       return true;
     }
 
     // Limpiar sesión y proceder a encolar
     db.clearSession(senderJid);
 
-    await this.sendMessage(
-      remoteJid,
-      `✅ ¡Excelente! Buscando y agregando *${media.title}${seasonLabel}* en *${languageLabel}* a la cola de descarga.\n\n⏳ Te avisaré por aquí apenas esté disponible en Plex.`
-    );
+    if (media.type === 'movie') {
+      await this.sendMessage(remoteJid, i18n.t('download_started', {
+        title: media.title,
+        language: languageLabel
+      }));
+    } else {
+      await this.sendMessage(remoteJid, i18n.t('download_started_tv', {
+        title: media.title,
+        season: seasonLabel,
+        language: languageLabel
+      }));
+    }
 
     try {
       let arrResult = null;
