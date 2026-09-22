@@ -1,0 +1,22 @@
+{
+  "name": "plex-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp para solicitar contenido en Plex y avisar al completarse la descarga",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "test-webhook": "node test/simulate-webhook.js",
+    "test-search": "node test/test-search.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "fuzzball": "^2.2.6",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
