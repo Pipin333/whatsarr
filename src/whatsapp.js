@@ -20,6 +20,7 @@ class WhatsAppBot {
     this.connected = false;
     this.reconnectAttempts = 0;
     this.qr = null;
+    this.botMessageIds = new Set();
   }
 
   isConnected() {
@@ -117,6 +118,12 @@ class WhatsAppBot {
   async _processIncomingMessage(msg) {
     if (!msg.message) return;
     if (msg.key.remoteJid === 'status@broadcast') return;
+
+    // Ignorar mensajes generados por el propio bot (para evitar bucles en self-chat / auto-chat)
+    if (msg.key.id && this.botMessageIds && this.botMessageIds.has(msg.key.id)) {
+      console.log(`[WhatsApp] 🤖 Ignorando mensaje saliente generado por el bot (id: ${msg.key.id})`);
+      return;
+    }
 
     const remoteJid = msg.key.remoteJid; // JID del chat (grupo o privado)
     const senderJid = msg.key.participant || remoteJid; // Quien envió el mensaje en un grupo
@@ -534,7 +541,7 @@ class WhatsAppBot {
     const media = session.media;
     const seasons = session.availableSeasons || [];
 
-    if (cleanText === '0' || cleanText.includes('cancel') || cleanText.includes('no es')) {
+    if (cleanText === '0' || /^(?:0|cancelar?|cancel|abortar|salir)$/i.test(cleanText) || cleanText === 'no es') {
       db.clearSession(senderJid);
       await this.sendMessage(remoteJid, i18n.t('request_cancelled'));
       return true;
@@ -587,7 +594,7 @@ class WhatsAppBot {
     const selectedSeason = session.selectedSeason || 'all';
     const seasonLabel = session.selectedSeasonLabel ? ` (${session.selectedSeasonLabel})` : (selectedSeason && selectedSeason !== 'all' ? ` (Temporada ${selectedSeason})` : '');
 
-    if (cleanText === '0' || cleanText.includes('cancel') || cleanText.includes('no es')) {
+    if (cleanText === '0' || /^(?:0|cancelar?|cancel|abortar|salir)$/i.test(cleanText) || cleanText === 'no es') {
       db.clearSession(senderJid);
       await this.sendMessage(remoteJid, i18n.t('request_cancelled'));
       return true;
@@ -702,10 +709,23 @@ class WhatsAppBot {
     return true;
   }
 
+  _recordBotMessage(id) {
+    if (!this.botMessageIds) this.botMessageIds = new Set();
+    this.botMessageIds.add(id);
+    if (this.botMessageIds.size > 500) {
+      const oldest = this.botMessageIds.values().next().value;
+      this.botMessageIds.delete(oldest);
+    }
+  }
+
   async sendMessage(jid, text) {
     if (!this.sock) return;
     try {
-      await this.sock.sendMessage(jid, { text });
+      const sent = await this.sock.sendMessage(jid, { text });
+      if (sent?.key?.id) {
+        this._recordBotMessage(sent.key.id);
+      }
+      return sent;
     } catch (err) {
       console.error(`[WhatsApp] Error enviando mensaje a ${jid}:`, err.message);
     }
@@ -714,13 +734,17 @@ class WhatsAppBot {
   async sendImage(jid, imageUrl, caption) {
     if (!this.sock) return;
     try {
-      await this.sock.sendMessage(jid, {
+      const sent = await this.sock.sendMessage(jid, {
         image: { url: imageUrl },
         caption: caption
       });
+      if (sent?.key?.id) {
+        this._recordBotMessage(sent.key.id);
+      }
+      return sent;
     } catch (err) {
       console.warn(`[WhatsApp] Error enviando imagen, enviando como texto:`, err.message);
-      await this.sendMessage(jid, caption);
+      return await this.sendMessage(jid, caption);
     }
   }
 }

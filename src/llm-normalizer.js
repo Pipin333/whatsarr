@@ -85,7 +85,7 @@ Debes devolver ESTRICTAMENTE un objeto JSON válido con este schema exacto, sin 
       },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 10000
+        timeout: 3500
       }
     );
 
