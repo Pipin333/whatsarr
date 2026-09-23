@@ -20,6 +20,19 @@ process.on('exit', (code) => {
   console.log(`[Process] Evento exit disparado con código ${code}`);
 });
 
+async function gracefulShutdown(signal) {
+  console.log(`\n[Process] 🛑 Señal ${signal} recibida. Deteniendo servicios ordenadamente...`);
+  try {
+    progressiveStreamer.stop();
+    webhookServer.stop();
+  } catch (_) {}
+  console.log('[Process] 👋 Bot detenido correctamente.');
+  process.exit(0);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
 async function main() {
   console.log('====================================================');
   console.log('🎬 PLEX WHATSAPP BOT - FLUJO DE DESCARGAS AUTOMÁTICO');

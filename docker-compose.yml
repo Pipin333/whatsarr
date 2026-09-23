@@ -1,0 +1,31 @@
+services:
+  plex-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: plex-whatsapp-bot:latest
+    container_name: plex-whatsapp-bot
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    env_file:
+      - .env
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+    volumes:
+      # Datos persistentes del bot (sesión WhatsApp Baileys, requests.json, usuarios)
+      - ./data:/app/data
+      # (Opcional) Montaje de almacenamiento de medios para hardlinks directos en streaming progresivo
+      # Descomenta y ajusta según las rutas de tu servidor si deseas streaming progresivo directo:
+      # - ${MOVIES_PATH:-/media/movies}:/media/movies
+      # - ${SERIES_PATH:-/media/series}:/media/series
+    extra_hosts:
+      # Permite al contenedor comunicarse con servicios (Radarr, Sonarr, qBittorrent, Plex) en el host
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

@@ -1,0 +1,40 @@
+# Dependencias locales
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Control de versiones
+.git
+.gitignore
+.github
+
+# Credenciales y variables locales sensibles
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Datos locales persistentes (NO hornear credenciales de WhatsApp ni bases de datos en la imagen)
+data/auth_info_baileys
+data/*.json
+
+# Scripts y utilidades específicas de Windows
+setup/
+iniciar-bot.bat
+start-background.vbs
+*.bat
+*.vbs
+*.ps1
+
+# Documentación, pruebas y logs
+test/
+docs/
+*.log
+.gemini/
+
+# Archivos de sistema operativo / IDEs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

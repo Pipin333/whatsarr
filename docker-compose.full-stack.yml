@@ -1,0 +1,144 @@
+# ==============================================================================
+# Docker Compose - Full Entertainment Stack
+# Despliegue completo: Bot + Sonarr + Radarr + Prowlarr + qBittorrent + Plex
+# Uso: docker compose -f docker-compose.full-stack.yml up -d
+# ==============================================================================
+
+services:
+  # 1. BOT DE WHATSAPP & WEBHOOKS
+  plex-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: plex-whatsapp-bot:latest
+    container_name: plex-whatsapp-bot
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+      - RADARR_URL=http://radarr:7878
+      - SONARR_URL=http://sonarr:8989
+      - PROWLARR_URL=http://prowlarr:9696
+      - QBITTORRENT_URL=http://qbittorrent:8080
+      - PLEX_URL=http://plex:32400
+      - MOVIES_PATH=/data/media/movies
+      - SERIES_PATH=/data/media/tv
+    volumes:
+      - ./data:/app/data
+      - ./media_data/media:/data/media
+    networks:
+      - media-net
+    depends_on:
+      - sonarr
+      - radarr
+      - prowlarr
+      - qbittorrent
+
+  # 2. PROWLARR (Gestor de Indexers / Trackers)
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Santiago
+    volumes:
+      - ./stack_config/prowlarr:/config
+    ports:
+      - "9696:9696"
+    networks:
+      - media-net
+
+  # 3. RADARR (Películas)
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Santiago
+    volumes:
+      - ./stack_config/radarr:/config
+      - ./media_data:/data
+    ports:
+      - "7878:7878"
+    networks:
+      - media-net
+
+  # 4. SONARR (Series de TV)
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Santiago
+    volumes:
+      - ./stack_config/sonarr:/config
+      - ./media_data:/data
+    ports:
+      - "8989:8989"
+    networks:
+      - media-net
+
+  # 5. QBITTORRENT (Cliente de Descarga)
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Santiago
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - ./stack_config/qbittorrent:/config
+      - ./media_data:/data
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    networks:
+      - media-net
+
+  # 6. PLEX MEDIA SERVER
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Santiago
+      - VERSION=docker
+      # Opcional: Clave de reclamo desde https://plex.tv/claim
+      - PLEX_CLAIM=${PLEX_CLAIM:-}
+    volumes:
+      - ./stack_config/plex:/config
+      - ./media_data/media/tv:/tv
+      - ./media_data/media/movies:/movies
+    ports:
+      - "32400:32400/tcp"
+      - "3005:3005/tcp"
+      - "8324:8324/tcp"
+      - "32469:32469/tcp"
+      - "1900:1900/udp"
+      - "32410:32410/udp"
+      - "32412:32412/udp"
+      - "32413:32413/udp"
+      - "32414:32414/udp"
+    networks:
+      - media-net
+
+networks:
+  media-net:
+    name: media-net
+    driver: bridge

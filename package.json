@@ -12,7 +12,12 @@
     "test-streaming": "node test/test-progressive-streamer.js",
     "configure:trackers": "node scripts/configure-trackers.js",
     "configure:clients": "node scripts/configure-download-clients.js",
-    "reset:whatsapp": "node scripts/reset-whatsapp.js"
+    "reset:whatsapp": "node scripts/reset-whatsapp.js",
+    "docker:build": "docker build -t plex-whatsapp-bot .",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:full-stack": "docker compose -f docker-compose.full-stack.yml up -d"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",

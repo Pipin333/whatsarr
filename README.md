@@ -2,7 +2,8 @@
 
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-blue.svg)]()
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](Dockerfile)
 [![Baileys](https://img.shields.io/badge/WhatsApp-Baileys%20v6.7-brightgreen.svg)](https://github.com/WhiskeySockets/Baileys)
 [![i18n](https://img.shields.io/badge/i18n-English%20%7C%20Spanish-orange.svg)]()
 
@@ -21,10 +22,11 @@ flowchart TD
         W["Web Dashboard UI (http://localhost:3001)"]
     end
 
-    subgraph Bot["🤖 Bot Core (Node.js Express)"]
+    subgraph Bot["🤖 Bot Core (Node.js Express / Docker Container)"]
         B["Baileys Multi-Device Client"]
         LLM["Google Gemini AI / Local Normalizer"]
         F["Release Scorer (Fuzzball + Rules Engine)"]
+        PS["Progressive Streamer (On-Demand Engine)"]
         API["Express REST API (Port 3001)"]
         DB[("Storage & Sessions (data/)")]
         I18N["i18n Localization (EN / ES)"]
@@ -34,11 +36,11 @@ flowchart TD
         R["Radarr (Movies - :7878)<br/>10GB Max Filter | HD-1080p"]
         S["Sonarr (TV Shows - :8989)<br/>3.5GB/ep Max | Multi-Season"]
         P["Prowlarr (Indexers Manager - :9696)"]
-        Q["qBittorrent (Client WebUI - :8080)"]
+        Q["qBittorrent (Client WebUI - :8080)<br/>Priority: 7 on Ep1 | Sequential DL"]
     end
 
     subgraph Media["🍿 Media Server & Storage"]
-        DISK["Local Storage (Movies / TV Shows)"]
+        DISK["Local / Volume Storage (Movies / TV Shows)"]
         PLEX["Plex Media Server (:32400)"]
     end
 
@@ -59,16 +61,19 @@ flowchart TD
     R --> P
     S --> P
     P -->|"Dispatches best release"| Q
-    Q -->|"Download completes"| DISK
-    DISK -->|"Import & Rename"| R
-    DISK -->|"Import & Rename"| S
+    PS -->|"Prioritizes Episode 1 (filePrio: 7)"| Q
+    Q -->|"Ep 1 completes (100%)"| DISK
+    DISK -->|"Instant hardlink / import"| PLEX
+    PS -->|"Early alert: 'Episode 1 is ready!' 🍿"| B
+    DISK -->|"Full season/movie import"| R
+    DISK -->|"Full season/movie import"| S
 
     %% Notification Flow
     R -->|"3. Webhook POST /webhook"| API
     S -->|"3. Webhook POST /webhook"| API
     API -->|"4. Refreshes Library"| PLEX
     API -->|"5. Formats localized alert via i18n"| I18N
-    I18N -->|"6. Sends 'Ready on Plex!' notification"| B
+    I18N -->|"6. Sends 'Full season ready on Plex!' notification"| B
     B -->|"WhatsApp alert with poster"| A
 ```
 
@@ -76,6 +81,15 @@ flowchart TD
 
 ## ✨ Key Features
 
+- ⚡ **Progressive On-Demand Streaming Engine**:
+  - Automatically isolates and searches **Episode 1** first with targeted `EpisodeSearch`.
+  - Sets sequential downloading and maximum priority (`priority: 7`) in qBittorrent on the first episode.
+  - Instantly links and alerts via WhatsApp as soon as **Episode 1 is ready** so you can press Play within minutes, while subsequent episodes download in the background.
+  - Sends a second celebration notification once the full season pack finishes downloading.
+- 🐳 **Complete Docker & Docker Compose Support**:
+  - Production-ready `Dockerfile` based on `node:22-bookworm-slim` with built-in `HEALTHCHECK`.
+  - Standalone compose (`docker-compose.yml`) that easily communicates with host-installed services via `host.docker.internal`.
+  - Turnkey full-stack compose (`docker-compose.full-stack.yml`) orchestrating the entire suite: Bot + Prowlarr + Radarr + Sonarr + qBittorrent + Plex.
 - 🌐 **Multi-Language Support (i18n)**:
   - Supports **English (`en`)** and **Spanish (`es`)** out of the box.
   - Switchable via `.env` (`BOT_LANGUAGE=en|es`), REST API, or live from the Web Dashboard.
@@ -207,6 +221,56 @@ To run the bot silently in the background whenever Windows starts:
 powershell -ExecutionPolicy Bypass -File .\setup\install-background-task.ps1
 ```
 *(To uninstall later, run `setup/uninstall-background-task.ps1`).*
+
+---
+
+## 🐳 Docker Deployment
+
+The repository includes complete Docker containerization for both **standalone bot deployment** (connecting to your existing host services) and an **all-in-one full media stack** (Bot + Sonarr + Radarr + Prowlarr + qBittorrent + Plex).
+
+### Option A: Standalone Bot (Recommended if you already run Sonarr/Radarr/Plex)
+
+1. **Configure Environment**:
+   ```bash
+   cp .env.docker.example .env
+   # Edit .env with your Radarr/Sonarr API keys and Plex token.
+   # Note: Use 'http://host.docker.internal:<port>' to reach services running on your host machine.
+   ```
+
+2. **Launch with Docker Compose**:
+   ```bash
+   docker compose up -d
+   # or with npm:
+   npm run docker:up
+   ```
+
+3. **Link WhatsApp**:
+   - **Method 1 (Web Browser)**: Open `http://localhost:3001` in your browser and scan the QR code displayed on the dashboard.
+   - **Method 2 (Terminal Logs)**: View the terminal QR code in container logs:
+     ```bash
+     docker compose logs -f
+     # or: npm run docker:logs
+     ```
+
+4. **Useful Docker Commands**:
+   ```bash
+   npm run docker:up          # Start container in background
+   npm run docker:down        # Stop container
+   npm run docker:logs        # Follow live logs & view QR
+   npm run docker:build       # Rebuild the Docker image
+   ```
+
+### Option B: All-In-One Full Entertainment Stack
+
+To spin up the entire ecosystem (Plex WhatsApp Bot + Prowlarr + Radarr + Sonarr + qBittorrent + Plex) interconnected in a unified Docker network:
+
+```bash
+docker compose -f docker-compose.full-stack.yml up -d
+# or with npm:
+npm run docker:full-stack
+```
+
+> 💡 **Persistent Data**: WhatsApp session credentials and databases are stored in `./data:/app/data`. Your WhatsApp login persists across container restarts, rebuilds, and updates.
 
 ---
 
