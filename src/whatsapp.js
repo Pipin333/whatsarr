@@ -35,7 +35,9 @@ class WhatsAppBot {
       version,
       logger: pino({ level: 'silent' }),
       auth: state,
-      printQRInTerminal: false // Manejaremos el QR manualmente para formatearlo bien
+      printQRInTerminal: false, // Manejaremos el QR manualmente para formatearlo bien
+      getMessage: async () => undefined,
+      syncFullHistory: false
     });
 
     // Guardar credenciales al actualizarse
