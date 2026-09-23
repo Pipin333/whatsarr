@@ -6,6 +6,7 @@ const db = require('./db');
 const arrService = require('./arr-service');
 const tmdb = require('./tmdb');
 const i18n = require('./i18n');
+const QRCode = require('qrcode');
 
 // Buffer en memoria para los ultimos eventos de log
 const recentLogs = [];
@@ -372,6 +373,71 @@ class WebhookServer {
     // 7. Eventos de log recientes
     this.app.get('/api/logs', (req, res) => {
       res.json({ success: true, logs: recentLogs.slice().reverse() });
+    });
+
+    // 8. Código QR actual para vinculación de WhatsApp
+    this.app.get('/api/qr', async (req, res) => {
+      try {
+        let qr = this.whatsappClient ? this.whatsappClient.getQR() : null;
+        if (!qr) {
+          const qrPath = path.join(__dirname, '..', 'data', 'qr_raw.txt');
+          const fs = require('fs');
+          if (fs.existsSync(qrPath)) {
+            qr = fs.readFileSync(qrPath, 'utf8').trim();
+          }
+        }
+        const isWaConnected = this.whatsappClient ? this.whatsappClient.isConnected() : false;
+        if (isWaConnected) {
+          return res.json({ success: false, connected: true, qr: null });
+        }
+        if (qr) {
+          const dataUrl = await QRCode.toDataURL(qr, {
+            errorCorrectionLevel: 'M',
+            margin: 2,
+            width: 320
+          });
+          return res.json({ success: true, connected: false, qr, dataUrl });
+        }
+      } catch (err) {
+        console.error('[Web] Error generando QR data URL:', err.message);
+      }
+      res.json({ success: false, connected: false, qr: null });
+    });
+
+    // 8.1 Imagen directa de código QR en PNG de alta resolución
+    this.app.get('/api/qr.png', async (req, res) => {
+      try {
+        let qr = this.whatsappClient ? this.whatsappClient.getQR() : null;
+        if (!qr) {
+          const qrPath = path.join(__dirname, '..', 'data', 'qr_raw.txt');
+          const fs = require('fs');
+          if (fs.existsSync(qrPath)) {
+            qr = fs.readFileSync(qrPath, 'utf8').trim();
+          }
+        }
+        if (!qr) {
+          return res.status(404).send('No QR available');
+        }
+        const buffer = await QRCode.toBuffer(qr, {
+          errorCorrectionLevel: 'M',
+          margin: 3,
+          width: 400,
+          color: {
+            dark: '#000000',
+            light: '#ffffff'
+          }
+        });
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return res.send(buffer);
+      } catch (err) {
+        return res.status(500).send('Error generating QR image');
+      }
+    });
+
+    // 8.2 Acceso amigable /qr
+    this.app.get('/qr', (req, res) => {
+      res.sendFile(path.join(__dirname, '..', 'public', 'qr.html'));
     });
 
     // Endpoint clasico de salud

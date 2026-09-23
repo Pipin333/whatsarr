@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vincular WhatsApp | WhatsArr</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: #0b1120;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      background: #1e293b;
+      padding: 32px;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      text-align: center;
+      max-width: 440px;
+      width: 100%;
+      border: 1px solid #334155;
+      position: relative;
+    }
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+      color: #38bdf8;
+      font-weight: 700;
+    }
+    p.subtitle {
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 0 0 20px 0;
+    }
+    .qr-wrapper {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 16px;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      margin-bottom: 20px;
+      min-width: 290px;
+      min-height: 290px;
+    }
+    .qr-wrapper img {
+      width: 260px;
+      height: 260px;
+      display: block;
+      image-rendering: pixelated;
+    }
+    .loading-spinner {
+      color: #64748b;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .instructions {
+      text-align: left;
+      background: #0f172a;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      border: 1px solid #1e293b;
+      margin-bottom: 20px;
+    }
+    .instructions h4 {
+      margin: 0 0 10px 0;
+      color: #e2e8f0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .instructions ol {
+      margin: 0;
+      padding-left: 20px;
+      color: #94a3b8;
+    }
+    .instructions li {
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .instructions b {
+      color: #f1f5f9;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(234, 179, 8, 0.15);
+      color: #facc15;
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      transition: all 0.3s ease;
+    }
+    .status-badge.connected {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+    .btn-dashboard {
+      display: inline-block;
+      margin-top: 15px;
+      color: #38bdf8;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .btn-dashboard:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="main-card">
+    <h1>📱 Vincular WhatsApp</h1>
+    <p class="subtitle">Escanea este código directamente con tu teléfono para restablecer la sesión limpia:</p>
+
+    <div class="qr-wrapper">
+      <img id="qr-img" src="/api/qr.png" alt="Código QR WhatsApp" onerror="handleQrError()" />
+      <div id="qr-loading" class="loading-spinner" style="display: none;">Generando código QR...</div>
+    </div>
+
+    <div class="instructions">
+      <h4>Pasos en tu teléfono:</h4>
+      <ol>
+        <li>Abre <b>WhatsApp</b>.</li>
+        <li>Toca los <b>tres puntos ⋮</b> (Android) o <b>Configuración ⚙️</b> (iPhone).</li>
+        <li>Selecciona <b>Dispositivos vinculados</b>.</li>
+        <li>Toca <b>Vincular un dispositivo</b> y enfoca esta pantalla.</li>
+      </ol>
+    </div>
+
+    <div>
+      <span class="status-badge" id="status-badge">
+        <span class="dot">⏳</span> <span id="status-text">Esperando escaneo con tu teléfono...</span>
+      </span>
+    </div>
+
+    <div>
+      <a href="/" class="btn-dashboard">← Volver al Panel de Control</a>
+    </div>
+  </div>
+
+  <script>
+    let lastQrRaw = null;
+    let isConnected = false;
+
+    function handleQrError() {
+      const img = document.getElementById('qr-img');
+      const loader = document.getElementById('qr-loading');
+      img.style.display = 'none';
+      loader.style.display = 'block';
+    }
+
+    async function poll() {
+      if (isConnected) return;
+
+      // 1. Comprobar si ya está conectado
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (data.services && data.services.whatsapp && data.services.whatsapp.connected) {
+          isConnected = true;
+          const badge = document.getElementById('status-badge');
+          badge.className = 'status-badge connected';
+          badge.innerHTML = '<span>🎉</span> ¡WhatsApp Conectado Exitosamente!';
+          document.getElementById('main-card').style.borderColor = '#22c55e';
+          setTimeout(() => { window.location.href = '/'; }, 2000);
+          return;
+        }
+      } catch (_) {}
+
+      // 2. Comprobar código QR
+      try {
+        const qrRes = await fetch('/api/qr');
+        const qrData = await qrRes.json();
+        const img = document.getElementById('qr-img');
+        const loader = document.getElementById('qr-loading');
+
+        if (qrData.success && qrData.qr) {
+          loader.style.display = 'none';
+          img.style.display = 'block';
+
+          if (qrData.dataUrl) {
+            img.src = qrData.dataUrl;
+          } else if (lastQrRaw !== qrData.qr) {
+            img.src = '/api/qr.png?t=' + Date.now();
+          }
+          lastQrRaw = qrData.qr;
+        } else if (qrData.connected) {
+          isConnected = true;
+          const badge = document.getElementById('status-badge');
+          badge.className = 'status-badge connected';
+          badge.innerHTML = '<span>🎉</span> ¡WhatsApp ya está vinculado!';
+          setTimeout(() => { window.location.href = '/'; }, 1500);
+        }
+      } catch (_) {}
+    }
+
+    poll();
+    setInterval(poll, 2500);
+  </script>
+</body>
+</html>

@@ -73,9 +73,46 @@ async function fetchStatus() {
     if (langSelect && data.language) {
       langSelect.value = data.language;
     }
+
+    // Dynamic WhatsApp Pairing Banner
+    updateWaPairingBanner(data.services.whatsapp?.connected);
   } catch (err) {
     console.warn('Error fetching status:', err);
   }
+}
+
+let lastDashboardQrRaw = null;
+async function updateWaPairingBanner(isConnected) {
+  const banner = document.getElementById('wa-pairing-banner');
+  if (!banner) return;
+  if (isConnected) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'block';
+
+  try {
+    const qrRes = await fetch('/api/qr');
+    const qrData = await qrRes.json();
+    const qrImg = document.getElementById('dashboard-qr-img');
+    const qrStatus = document.getElementById('dashboard-qr-status');
+    if (qrData.success && qrData.qr) {
+      if (qrImg) {
+        if (qrData.dataUrl) {
+          qrImg.src = qrData.dataUrl;
+        } else if (lastDashboardQrRaw !== qrData.qr) {
+          qrImg.src = '/api/qr.png?t=' + Date.now();
+        }
+      }
+      lastDashboardQrRaw = qrData.qr;
+      if (qrStatus) {
+        qrStatus.textContent = '⏳ Esperando escaneo con tu teléfono...';
+        qrStatus.style.color = '#eab308';
+      }
+    } else if (qrData.connected) {
+      banner.style.display = 'none';
+    }
+  } catch (_) {}
 }
 
 async function changeLanguage(lang) {

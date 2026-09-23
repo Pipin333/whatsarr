@@ -36,6 +36,20 @@
   </header>
 
   <main class="container">
+    <!-- WhatsApp QR Code Pairing Banner (shown when WhatsApp is disconnected) -->
+    <section id="wa-pairing-banner" class="section" style="display: none; margin-bottom: 24px;">
+      <div class="card" style="border: 2px solid #38bdf8; background: linear-gradient(135deg, #1e293b, #0f172a); text-align: center; padding: 24px;">
+        <h2 style="color: #38bdf8; margin-top: 0; font-size: 20px;">📱 Vincular WhatsApp con WhatsArr</h2>
+        <p style="color: #94a3b8; font-size: 14px; max-width: 600px; margin: 0 auto 16px;">
+          Escanea este código QR directamente desde WhatsApp en tu teléfono (<b>Ajustes &gt; Dispositivos vinculados &gt; Vincular un dispositivo</b>):
+        </p>
+        <div style="background: #ffffff; padding: 12px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+          <img id="dashboard-qr-img" src="/api/qr.png" alt="WhatsApp QR Code" style="width: 240px; height: 240px; display: block;" />
+        </div>
+        <p id="dashboard-qr-status" style="margin-top: 12px; font-weight: 600; color: #eab308; font-size: 13px;">⏳ Esperando escaneo con tu teléfono...</p>
+      </div>
+    </section>
+
     <!-- Key Metrics -->
     <section class="stats-grid">
       <div class="card stat-card">

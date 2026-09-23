@@ -4,6 +4,22 @@ const arrService = require('./arr-service');
 const progressiveStreamer = require('./progressive-streamer');
 const config = require('./config');
 
+process.on('uncaughtException', (err) => {
+  console.error('[Process] ⚠️ Excepción no capturada:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process] ⚠️ Rechazo no capturado:', reason);
+});
+
+process.on('beforeExit', (code) => {
+  console.log(`[Process] Evento beforeExit disparado con código ${code}`);
+});
+
+process.on('exit', (code) => {
+  console.log(`[Process] Evento exit disparado con código ${code}`);
+});
+
 async function main() {
   console.log('====================================================');
   console.log('🎬 PLEX WHATSAPP BOT - FLUJO DE DESCARGAS AUTOMÁTICO');

@@ -19,10 +19,15 @@ class WhatsAppBot {
     this.sock = null;
     this.connected = false;
     this.reconnectAttempts = 0;
+    this.qr = null;
   }
 
   isConnected() {
     return this.connected;
+  }
+
+  getQR() {
+    return this.qr;
   }
 
   async start() {
@@ -48,11 +53,21 @@ class WhatsAppBot {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        this.qr = qr;
         console.log('\n======================================================');
         console.log('📱 ESCANEA ESTE CÓDIGO QR CON WHATSAPP EN TU TELÉFONO:');
+        console.log('🌐 O abre en tu navegador: http://localhost:3001/qr');
         console.log('(Abre WhatsApp -> Dispositivos Vinculados -> Vincular dispositivo)');
         console.log('======================================================\n');
-        qrcode.generate(qr, { small: true });
+        qrcode.generate(qr, { small: true }, (ascii) => {
+          console.log(ascii);
+          try {
+            const fs = require('fs');
+            const path = require('path');
+            fs.writeFileSync(path.join(__dirname, '..', 'data', 'qr_terminal.txt'), ascii, 'utf8');
+            fs.writeFileSync(path.join(__dirname, '..', 'data', 'qr_raw.txt'), qr, 'utf8');
+          } catch (_) {}
+        });
       }
 
       if (connection === 'close') {
@@ -68,6 +83,15 @@ class WhatsAppBot {
         }
       } else if (connection === 'open') {
         this.connected = true;
+        this.qr = null;
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const rawPath = path.join(__dirname, '..', 'data', 'qr_raw.txt');
+          const termPath = path.join(__dirname, '..', 'data', 'qr_terminal.txt');
+          if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath);
+          if (fs.existsSync(termPath)) fs.unlinkSync(termPath);
+        } catch (_) {}
         this.reconnectAttempts = 0;
         console.log('\n======================================================');
         console.log('🎉 ¡WHATSAPP CONECTADO EXITOSAMENTE!');

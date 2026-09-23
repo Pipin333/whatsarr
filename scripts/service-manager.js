@@ -8,9 +8,9 @@ const cp = require('child_process');
 
 const PORT = 3001;
 
-function checkHealth(timeoutMs = 2500) {
+function checkHealth(timeoutMs = 3000) {
   return new Promise((resolve, reject) => {
-    const req = http.get(`http://localhost:${PORT}/health`, { timeout: timeoutMs }, res => {
+    const req = http.get(`http://127.0.0.1:${PORT}/health`, { timeout: timeoutMs }, res => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
@@ -35,7 +35,7 @@ function getBotPids() {
 
   // 1. Query WMI via PowerShell without commandline escaping issues
   try {
-    const psScript = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*src/index.js*' } | Select-Object -ExpandProperty ProcessId`;
+    const psScript = `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'node.exe' -and $_.CommandLine -like '*src/index.js*' } | Select-Object -ExpandProperty ProcessId`;
     const out = cp.execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
       encoding: 'utf8',
       timeout: 4000
