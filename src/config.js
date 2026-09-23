@@ -29,7 +29,7 @@ function getProwlarrApiKey() {
 
 module.exports = {
   port: parseInt(process.env.PORT || '3001', 10),
-  language: (process.env.BOT_LANGUAGE || 'en').toLowerCase(),
+  language: (process.env.BOT_LANGUAGE || 'es').toLowerCase(),
   moviesPath: process.env.MOVIES_PATH || 'G:\\Media\\Peliculas',
   seriesPath: process.env.SERIES_PATH || 'G:\\Media\\Series',
   
