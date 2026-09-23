@@ -273,6 +273,29 @@ class ArrService {
     return [];
   }
 
+  async prioritizeEpisode1(seriesId, seasonNumber = 1) {
+    if (!this.sonarrKey || !seriesId) return null;
+    try {
+      const epRes = await axios.get(`${this.sonarrUrl}/api/v3/episode`, {
+        params: { seriesId },
+        headers: { 'X-Api-Key': this.sonarrKey },
+        timeout: 6000
+      });
+      const ep1 = (epRes.data || []).find(e => e.seasonNumber === seasonNumber && e.episodeNumber === 1 && !e.hasFile);
+      if (ep1) {
+        await axios.post(`${this.sonarrUrl}/api/v3/command`, {
+          name: 'EpisodeSearch',
+          episodeIds: [ep1.id]
+        }, { headers: { 'X-Api-Key': this.sonarrKey }, timeout: 6000 });
+        console.log(`[Sonarr] ⚡ On-Demand: EpisodeSearch prioritario disparado para T${seasonNumber}E01 (ID: ${ep1.id})`);
+        return ep1.id;
+      }
+    } catch (err) {
+      console.warn(`[Sonarr] Error al priorizar T${seasonNumber}E01:`, err.message);
+    }
+    return null;
+  }
+
   async addSeries(media, languageChoice = 'latino', selectedSeasons = 'all') {
     if (!this.sonarrKey) {
       throw new Error('Sonarr no está configurado (falta SONARR_API_KEY). Revisa el archivo .env');
@@ -300,6 +323,7 @@ class ArrService {
 
     // Normalizar temporadas seleccionadas (soporta rangos ej: "2-5", "2 a 5", arrays o individuales)
     const targetSeasons = this.parseSeasonSelection(selectedSeasons);
+    const firstSeason = (targetSeasons && targetSeasons.length > 0) ? targetSeasons[0] : 1;
 
     // Comprobar si ya existe
     try {
@@ -332,6 +356,9 @@ class ArrService {
             console.warn('[Sonarr] Advertencia actualizando temporadas en serie existente:', putErr.message);
           }
 
+          // Priorizar capítulo 1 on-demand
+          await this.prioritizeEpisode1(found.id, firstSeason);
+
           for (const sNum of targetSeasons) {
             try {
               await axios.post(`${this.sonarrUrl}/api/v3/command`, {
@@ -350,7 +377,8 @@ class ArrService {
           console.log(`[Sonarr] Serie "${found.title}" ya tiene ${episodeFileCount} episodios descargados.`);
           return { success: true, sonarrId: found.id, title: found.title, alreadyExists: true, hasFile: true };
         }
-        console.log(`[Sonarr] Serie "${found.title}" ya existe en Sonarr sin episodios. Disparando búsqueda...`);
+        console.log(`[Sonarr] Serie "${found.title}" ya existe en Sonarr sin episodios. Disparando búsqueda on-demand...`);
+        await this.prioritizeEpisode1(found.id, 1);
         await this._triggerSonarrSearch([found.id]);
         return { success: true, sonarrId: found.id, title: found.title, alreadyExists: true, hasFile: false };
       }
@@ -387,7 +415,7 @@ class ArrService {
       tags: tagId ? [tagId] : [],
       seasonFolder: true,
       addOptions: {
-        searchForMissingEpisodes: true
+        searchForMissingEpisodes: false // Lo controlamos explícitamente abajo para ordenar el pipeline on-demand
       }
     };
 
@@ -398,26 +426,47 @@ class ArrService {
 
     const newSeriesId = addRes.data?.id;
     if (newSeriesId) {
-      if (targetSeasons && targetSeasons.length > 0) {
-        for (const sNum of targetSeasons) {
+      // 1. DISPARAR PRIORITARIAMENTE EL CAPÍTULO 1 ON-DEMAND
+      await this.prioritizeEpisode1(newSeriesId, firstSeason);
+
+      // 2. DISPARAR LA BÚSQUEDA DE LA TEMPORADA INICIAL (Temporada objetivo)
+      try {
+        await axios.post(`${this.sonarrUrl}/api/v3/command`, {
+          name: 'SeasonSearch',
+          seriesId: newSeriesId,
+          seasonNumber: firstSeason
+        }, { headers: { 'X-Api-Key': this.sonarrKey }, timeout: 6000 });
+        console.log(`[Sonarr] 🎯 SeasonSearch T${firstSeason} disparado prioritariamente para serie #${newSeriesId}`);
+      } catch (cmdErr) {
+        console.warn(`[Sonarr] Advertencia al disparar SeasonSearch T${firstSeason}:`, cmdErr.message);
+      }
+
+      // 3. SI HAY MÁS TEMPORADAS, DISPARARLAS DIFERIDAS PARA NO SATURAR EL ANCHO DE BANDA
+      if (targetSeasons && targetSeasons.length > 1) {
+        const otherSeasons = targetSeasons.filter(s => s !== firstSeason);
+        setTimeout(async () => {
+          for (const sNum of otherSeasons) {
+            try {
+              await axios.post(`${this.sonarrUrl}/api/v3/command`, {
+                name: 'SeasonSearch',
+                seriesId: newSeriesId,
+                seasonNumber: sNum
+              }, { headers: { 'X-Api-Key': this.sonarrKey }, timeout: 6000 });
+              console.log(`[Sonarr] SeasonSearch diferido T${sNum} disparado para serie #${newSeriesId}`);
+            } catch (_) {}
+          }
+        }, 15000);
+      } else if (!targetSeasons || selectedSeasons === 'all' || selectedSeasons === 'todas') {
+        // Si fue "todas", buscar el resto de temporadas después de que T1 tome el liderazgo
+        setTimeout(async () => {
           try {
             await axios.post(`${this.sonarrUrl}/api/v3/command`, {
-              name: 'SeasonSearch',
-              seriesId: newSeriesId,
-              seasonNumber: sNum
+              name: 'SeriesSearch',
+              seriesId: newSeriesId
             }, { headers: { 'X-Api-Key': this.sonarrKey }, timeout: 6000 });
-            console.log(`[Sonarr] SeasonSearch T${sNum} disparado para nueva serie #${newSeriesId}`);
-          } catch (cmdErr) {
-            console.warn(`[Sonarr] Advertencia al disparar SeasonSearch T${sNum}:`, cmdErr.message);
-          }
-        }
-      } else {
-        try {
-          await axios.post(`${this.sonarrUrl}/api/v3/command`, {
-            name: 'SeriesSearch',
-            seriesId: newSeriesId
-          }, { headers: { 'X-Api-Key': this.sonarrKey }, timeout: 6000 });
-        } catch (_) {}
+            console.log(`[Sonarr] SeriesSearch diferido disparado para serie #${newSeriesId}`);
+          } catch (_) {}
+        }, 20000);
       }
     }
 

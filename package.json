@@ -4,6 +4,7 @@
   "description": "Bot de WhatsApp para solicitar contenido en Plex y avisar al completarse la descarga",
   "main": "src/index.js",
   "type": "commonjs",
+  "license": "MIT",
   "scripts": {
     "start": "node src/index.js",
     "test-webhook": "node test/simulate-webhook.js",

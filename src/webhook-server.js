@@ -558,11 +558,19 @@ class WebhookServer {
 
     // 3. Notificar por WhatsApp
     if (this.whatsappClient && this.whatsappClient.isConnected()) {
-      const message = i18n.t('download_completed', {
-        title: pending.title,
-        year: pending.year || '',
-        extraInfo: extraDetails ? `\n${extraDetails}` : ''
-      });
+      let message = '';
+      if (isSeries && pending.ep1Notified) {
+        const isEN = i18n.getLanguage() === 'en';
+        message = isEN
+          ? `🎉 *Full Season Ready on Plex!*\n\nAll remaining episodes of *${pending.title}*${pending.season ? ` (${pending.season})` : ''} are now downloaded and ready to binge-watch.${extraDetails ? `\n\n${extraDetails}` : ''}`
+          : `🎉 *¡Temporada completa lista en Plex!*\n\nTodos los capítulos restantes de *${pending.title}*${pending.season ? ` (${pending.season})` : ''} ya se encuentran descargados y listos para maratonear.${extraDetails ? `\n\n${extraDetails}` : ''}`;
+      } else {
+        message = i18n.t('download_completed', {
+          title: pending.title,
+          year: pending.year || '',
+          extraInfo: extraDetails ? `\n${extraDetails}` : ''
+        });
+      }
 
       const targetJid = pending.chatJid || pending.userJid;
 

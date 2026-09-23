@@ -171,6 +171,16 @@ class Storage {
     });
   }
 
+  updateRequest(requestId, updates = {}) {
+    const req = this.requests.find(r => r.id === requestId);
+    if (req) {
+      Object.assign(req, updates);
+      this._save(this.requestsFile, this.requests);
+      return req;
+    }
+    return null;
+  }
+
   markCompleted(requestId) {
     const req = this.requests.find(r => r.id === requestId);
     if (req) {
