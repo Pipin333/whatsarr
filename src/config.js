@@ -35,7 +35,7 @@ module.exports = {
   
   gemini: {
     apiKey: (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || '').trim(),
-    model: process.env.GEMINI_MODEL || 'gemini-3.6-flash'
+    model: process.env.GEMINI_MODEL || 'gemini-flash-latest'
   },
   
   prowlarr: {

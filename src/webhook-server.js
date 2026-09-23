@@ -440,6 +440,20 @@ class WebhookServer {
       res.sendFile(path.join(__dirname, '..', 'public', 'qr.html'));
     });
 
+    // 8.3 Enviar mensaje de prueba para verificar conectividad bidireccional
+    this.app.get('/api/test-message', async (req, res) => {
+      try {
+        const to = req.query.to || '56975200121@s.whatsapp.net';
+        if (this.whatsappClient) {
+          await this.whatsappClient.sendMessage(to, '🍿 ¡Hola! Este es un mensaje de prueba desde WhatsArr. Si estás leyendo esto, la comunicación está 100% activa.');
+          return res.json({ success: true, sentTo: to });
+        }
+        res.status(503).json({ success: false, error: 'Cliente de WhatsApp no inicializado' });
+      } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+      }
+    });
+
     // Endpoint clasico de salud
     this.app.get('/health', async (req, res) => {
       const radarrStatus = await arrService.testRadarr();

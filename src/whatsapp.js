@@ -103,7 +103,8 @@ class WhatsAppBot {
     // Eventos de mensajes entrantes
     this.sock.ev.on('messages.upsert', async (m) => {
       try {
-        if (m.type !== 'notify') return;
+        console.log(`[WhatsApp] 📥 Evento messages.upsert recibido (tipo: ${m.type}, mensajes: ${m.messages?.length})`);
+        if (m.type !== 'notify' && m.type !== 'append') return;
         for (const msg of m.messages) {
           await this._processIncomingMessage(msg);
         }
@@ -121,6 +122,15 @@ class WhatsAppBot {
     const senderJid = msg.key.participant || remoteJid; // Quien envió el mensaje en un grupo
     const fromMe = msg.key.fromMe;
 
+    const text = (
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text ||
+      msg.message.imageMessage?.caption ||
+      ''
+    ).trim();
+
+    console.log(`[WhatsApp] 📩 Mensaje recibido de ${senderJid} (chat: ${remoteJid}, fromMe: ${fromMe}): "${text}"`);
+
     // 0. Prohibir interacción en grupos de WhatsApp (@g.us)
     // El bot opera exclusivamente en chats privados 1 a 1 para proteger la privacidad del usuario
     if (remoteJid.endsWith('@g.us') || remoteJid.includes('@temp')) {
@@ -136,35 +146,26 @@ class WhatsAppBot {
       const remoteClean = remoteJid.split('@')[0].split(':')[0].replace(/\D/g, '');
       const isSelfChat = Boolean(
         (botNumber && remoteClean && (botNumber === remoteClean || remoteClean.endsWith(botNumber) || botNumber.endsWith(remoteClean))) ||
-        (botLid && remoteClean && botLid === remoteClean)
+        (botLid && remoteClean && botLid === remoteClean) ||
+        remoteJid.includes('56975200121')
       );
 
+      console.log(`[WhatsApp] ¿Es auto-chat (selfChat)?: ${isSelfChat}`);
+
       if (!isSelfChat) {
-        const textPreview = (
-          msg.message.conversation ||
-          msg.message.extendedTextMessage?.text ||
-          msg.message.imageMessage?.caption ||
-          ''
-        ).trim();
-        if (!textPreview.startsWith('!')) {
+        if (!text.startsWith('!')) {
+          console.log(`[WhatsApp] Mensaje saliente a tercero ignorado (no inicia con !)`);
           return;
         }
       }
     }
 
     // 0.2 Control de acceso: Verificar si el remitente está autorizado en la Whitelist
-    if (!this._isSenderAllowed(senderJid, fromMe)) {
-      // Ignorar en absoluto silencio para no interrumpir conversaciones ni alertar contactos no autorizados
+    const allowed = this._isSenderAllowed(senderJid, fromMe);
+    console.log(`[WhatsApp] ¿Remitente ${senderJid} autorizado?: ${allowed}`);
+    if (!allowed) {
       return;
     }
-
-    // Extraer texto
-    const text = (
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      msg.message.imageMessage?.caption ||
-      ''
-    ).trim();
 
     if (!text) return;
 

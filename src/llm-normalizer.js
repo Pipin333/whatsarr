@@ -4,7 +4,7 @@ const config = require('./config');
 class LLMNormalizer {
   constructor() {
     this.apiKey = config.gemini ? config.gemini.apiKey : (process.env.GEMINI_API_KEY || '');
-    this.model = config.gemini ? config.gemini.model : (process.env.GEMINI_MODEL || 'gemini-3.6-flash');
+    this.model = config.gemini ? config.gemini.model : (process.env.GEMINI_MODEL || 'gemini-flash-latest');
     this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
   }
 
